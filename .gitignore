@@ -1,0 +1,19 @@
+# 依赖（本项目零依赖，留个保险）
+node_modules/
+
+# 本地预览与截图
+.preview/
+
+# 开发时的临时文件（测试脚本、诊断页）
+.t-*.js
+.t-*.html
+.t-*.txt
+.c.js
+.s.js
+
+# 编辑器与系统
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
