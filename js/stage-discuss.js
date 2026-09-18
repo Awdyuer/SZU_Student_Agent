@@ -9,7 +9,7 @@
 
 import { $, el, delay, scrollToEnd, replayEntryAnimation, reduceMotion } from "./ui.js";
 import {
-  fetchDiscussion, postDiscussion, fetchDiscussionEnd, MOCK_TEACHER_FOLLOWUP
+  fetchDiscussion, postDiscussion, MOCK_TEACHER_FOLLOWUP, CLASS_END_EVENT
 } from "./api.js";
 
 /* 说话人 → 头像与配色 */
@@ -145,21 +145,21 @@ export function createStage(ctx) {
     endBtn.disabled = true;
     endBtn.textContent = "老师正在总结…";
 
-    fetchDiscussionEnd(ctx.lessonId).then(function (closing) {
-      renderMessage({
-        id: "host-closing",
-        speaker: "host",
-        name: "老师",
-        text: closing,
-        at: new Date().toTimeString().slice(0, 5)
-      });
-
+    /* 结束也是「一轮」：发控制消息，老师的收尾发言与新的 host_phase
+       都由后端这一轮返回。前端不自己切到结束态。 */
+    ctx.sendControl(CLASS_END_EVENT).then(function (res) {
+      var text = res && res.message && res.message.text;
+      if (text) {
+        renderMessage({
+          id: "host-closing",
+          speaker: "host",
+          name: "老师",
+          text: text,
+          at: new Date().toTimeString().slice(0, 5)
+        });
+      }
       composer.hidden = true;
       endBtn.hidden = true;
-
-      return delay(reduceMotion ? 0 : 700).then(function () {
-        ctx.advance("done");
-      });
     }).catch(function (err) {
       ended = false;
       endBtn.disabled = false;
@@ -191,7 +191,6 @@ export function createStage(ctx) {
     },
 
     enter: function () {
-      ctx.rail.setPhase("课堂讨论");
       replayEntryAnimation(pane);
       if (!loaded) load();
       if (!posted) setTimeout(function () { input.focus(); }, 300);

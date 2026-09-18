@@ -35,8 +35,7 @@ export function createStage(ctx) {
     },
 
     enter: function () {
-      ctx.rail.completeAll();
-      ctx.rail.setBadge("已结束");
+      ctx.setStatus("已结束");
       renderKnowledgePoints();
       replayEntryAnimation(pane);
     },

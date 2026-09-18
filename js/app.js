@@ -1,7 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
    AI 学习空间 —— 编排层
    ├─ 路由：入口 / 课堂 / 课后
-   └─ 课堂阶段状态机（7 个 stage）+ 过渡动效调度
+   └─ 界面跟随后端的 host_phase（见 ORCHESTRATOR.md）
+
+   前端不决定演到哪一幕。每次拿到后端响应就读 host_phase，
+   变了才切界面。所有界面的真值源在后端。
 
    目前只有一节课，所以不提供选课。将来接多门课时再加「课程列表」
    这一层，接口契约见 api.js 末尾。
@@ -12,8 +15,9 @@ import {
   reduceMotion, showToast
 } from "./ui.js";
 
-import { fetchLesson, LESSON_ID } from "./api.js";
-import { createRail } from "./rail.js";
+import { fetchLesson, sendChat, LESSON_ID } from "./api.js";
+import { uiOf, labelOf, isKnown } from "./phases.js";
+import { createVeil } from "./veil.js";
 import { createThemeSwitch } from "./theme.js";
 import { createStage as createClassStage } from "./stage-class.js";
 import { createView as createReviewView } from "./view-review.js";
@@ -27,14 +31,33 @@ import { createStage as createDoneStage } from "./stage-done.js";
    会话与课时
    ═══════════════════════════════════════════════════════════ */
 
-var sessionId = (window.crypto && crypto.randomUUID)
-  ? crypto.randomUUID()
-  : "s-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+/* sessionId 不能每次刷新都换新的 —— 它是后端 checkpointer 的
+   thread_id（ORCHESTRATOR.md §7），换了就等于每次刷新后端都当新会话，
+   上一轮的状态接不上。所以持久化。 */
+var SESSION_KEY = "ai-learn.sessionId";
+
+function loadSessionId() {
+  try {
+    var saved = localStorage.getItem(SESSION_KEY);
+    if (saved) return saved;
+  } catch (e) { /* 隐私模式下不可用 */ }
+
+  var fresh = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : "s-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+  try { localStorage.setItem(SESSION_KEY, fresh); } catch (e) { /* 忽略 */ }
+  return fresh;
+}
+
+var sessionId = loadSessionId();
 
 var currentLessonId = LESSON_ID;
 var lesson = null;
 
-var rail = null;
+/* 后端当前说的那一幕。null 表示还没跟后端对过话 */
+var hostPhase = null;
+
+var veil = null;
 var themeSwitch = null;
 
 
@@ -125,10 +148,11 @@ function renderRoute() {
 
 
 /* ═══════════════════════════════════════════════════════════
-   课堂阶段状态机
+   课堂界面
 
-   idle → chat → video → summary → reflect → discuss → done
-   （chat / video 同属「引导学习」阶段）
+   界面不自己排顺序 —— 后端说 host_phase 是哪一个，就显示对应界面。
+   唯一的例外是 guided_learning 内部还有「对话 / 视频」两段，
+   那是前端的局部状态（学生点「播放视频」进入，看完通知后端）。
    ═══════════════════════════════════════════════════════════ */
 
 var PANE = {
@@ -141,81 +165,112 @@ var PANE = {
   done: "stage-done"
 };
 
-var PHASE_OF_STAGE = {
-  idle: null,
-  chat: "引导学习",
-  video: "引导学习",
-  summary: "总结复述",
-  reflect: "深入思考",
-  discuss: "课堂讨论",
-  done: "课堂讨论"
-};
-
 var currentStage = "idle";
-var stageSwitching = false;
+var phaseSwitching = false;
 
 var owners = {};
 var classStage = null;    /* 课堂模块实例：idle/chat/video 三个子阶段共用 */
 var reviewView = null;    /* 课后（内容待定） */
 
+/* 页头那枚状态胶囊 —— 进度轨删掉后，这是学生判断「现在在哪一步」
+   的唯一依据，所以每一幕切换都要更新它。 */
+function setStatus(text) {
+  var badge = $("class-badge");
+  if (!badge) return;
+  if (!text) {
+    badge.hidden = true;
+    return;
+  }
+  badge.hidden = false;
+  badge.textContent = text;
+}
+
 function ctxFor() {
   return {
-    rail: rail,
     sessionId: sessionId,
     lessonId: currentLessonId,
     getLesson: function () { return lesson; },
-    advance: advanceTo,
+    getPhase: function () { return hostPhase; },
+    /* 后端每轮返回后统一交给这里 —— 「完全跟随」的落点 */
+    applyServerTurn: applyServerTurn,
+    /* 各阶段模块更新页头状态（视频这类子状态用） */
+    setStatus: setStatus,
+    /* 课堂内部的局部切换（对话 ⇄ 视频），不经后端 */
+    showStage: setStage,
+    /* 给后端发一条控制消息（/继续、/下课 之类），响应统一按 host_phase 处理。
+       「学生手动进入下一阶段」保留的就是这个 —— 但推进与否由后端判定。 */
+    sendControl: function (text) {
+      return sendChat({
+        sessionId: sessionId,
+        lessonId: currentLessonId,
+        message: text,
+        now: new Date().toISOString()
+      }).then(function (res) {
+        applyServerTurn(res);
+        return res;
+      });
+    },
     toast: showToast,
     goHome: function () { go(""); }
   };
 }
 
-/* 立即切换（不含过渡动效）—— 初始化与深链恢复用 */
+/* 立即切换界面。只改显示，不碰任何进度概念 */
 function setStage(name) {
   if (!PANE[name]) return;
   currentStage = name;
 
   Object.keys(PANE).forEach(function (key) {
-    $(PANE[key]).hidden = key !== name;
+    var node = $(PANE[key]);
+    if (node) node.hidden = key !== name;
   });
 
-  if (name === "idle") {
-    rail.hide();
-    rail.setBadge(null);   /* 回课前要把上一轮留下的阶段徽标清掉 */
-  } else {
-    rail.show();
-  }
+  var pane = $(PANE[name]);
+  if (pane) replayEntryAnimation(pane);
+
+  /* 先按当前 host_phase 给个默认状态，owner.enter 可以覆盖成子状态 */
+  setStatus(hostPhase ? labelOf(hostPhase) : "");
 
   var owner = owners[name];
   if (owner && owner.enter) owner.enter(name);
 }
 
-/* 带动效地推进到下一个阶段 */
-function advanceTo(name) {
-  if (!PANE[name] || stageSwitching) return Promise.resolve();
+/* 后端每轮返回后统一处理。读 host_phase，变了才切界面。
+   切幕由后端的 judge_advance 决定，前端不参与判断。 */
+function applyServerTurn(res) {
+  if (!res || !res.hostPhase) return;
 
-  var prev = owners[currentStage];
-  var next = owners[name];
-  var phase = PHASE_OF_STAGE[name];
-  var phaseChanged = PHASE_OF_STAGE[currentStage] !== phase;
+  var phase = res.hostPhase;
 
-  /* 离开旧模块（切模块才调，同一模块内部切换不调） */
-  if (prev && prev !== next && prev.leave) prev.leave();
-
-  /* 阶段没变就不播过渡遮罩。
-     遮罩是用来宣告「进入新阶段」的；discuss 和 done 同属「课堂讨论」，
-     再播一次会让人以为又被送回了讨论页。 */
-  if (!phaseChanged) {
-    setStage(name);
-    return Promise.resolve();
+  if (!isKnown(phase)) {
+    console.warn("[app] 后端下发了不认识的 host_phase，已忽略：" + phase);
+    return;
   }
 
-  stageSwitching = true;
-  return rail.transitionTo(phase, function () {
-    setStage(name);
-  }).finally(function () {
-    stageSwitching = false;
-  });
+  if (phase === hostPhase) return;      /* 没变，什么都不做 */
+
+  var from = hostPhase;
+  hostPhase = phase;
+  setStatus(labelOf(phase));
+
+  var target = uiOf(phase);
+  if (!target) return;
+
+  /* 已经在目标界面了（比如视频是 guided_learning 的内部状态），
+     只更新状态文字，别把学生正在看的视频打断 */
+  if (target === currentStage) return;
+  if (phase === "guided_learning" && currentStage === "video") return;
+
+  /* 从「课前」进第一幕是开课，不是切幕，不播遮罩 */
+  if (from === null) {
+    setStage(target);
+    return;
+  }
+
+  if (phaseSwitching) return;
+  phaseSwitching = true;
+  veil.play(phase, function () { setStage(target); })
+    .finally(function () { phaseSwitching = false; });
 }
 
 /* 去重：chat/video 和 idle 是同一个模块实例 */
@@ -301,7 +356,7 @@ document.addEventListener("keydown", function (e) {
    启动
    ═══════════════════════════════════════════════════════════ */
 
-rail = createRail();
+veil = createVeil();
 themeSwitch = createThemeSwitch();
 
 var ctx = ctxFor();

@@ -5,7 +5,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 import { $, el, renderInline, replayEntryAnimation } from "./ui.js";
-import { REFLECTION_LENSES, submitReflection } from "./api.js";
+import { REFLECTION_LENSES, submitReflection, CONTINUE_EVENT } from "./api.js";
 
 /* verdict → 展示文案与配色 */
 var VERDICT = {
@@ -171,11 +171,17 @@ export function createStage(ctx) {
   return {
     mount: function () {
       buildCards();
-      nextBtn.addEventListener("click", function () { ctx.advance("discuss"); });
+      /* 保留手动推进，但推不推由后端判定 */
+      nextBtn.addEventListener("click", function () {
+        nextBtn.disabled = true;
+        ctx.sendControl(CONTINUE_EVENT).catch(function (err) {
+          nextBtn.disabled = false;
+          ctx.toast("发送失败：" + err.message);
+        });
+      });
     },
 
     enter: function () {
-      ctx.rail.setPhase("深入思考");
       replayEntryAnimation(pane);
     },
 

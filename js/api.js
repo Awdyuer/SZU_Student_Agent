@@ -91,30 +91,112 @@ export function fetchLesson(lessonId) {
    ═══════════════════════════════════════════════════════════ */
 
 export function sendChat(payload) {
-  if (USE_MOCK) {
-    return delay(700).then(function () {
-      return {
-        ok: true,
-        message: { text: "记下了。等这段讲完我们一起处理 👌", speech: "" },
-        hostPhase: "intro",
-        introComplete: false
-      };
-    });
-  }
+  if (USE_MOCK) return mockChat(payload);
   return request("POST", "/api/chat", payload);
 }
 
-/* 课程介绍的开场白 —— 内容取自 class agent/KNOWLEDGE-BASE.md */
-export var MOCK_INTRO = [
-  "你好！我是这节课的 AI 老师。\n今天我们一起学 **第 3 章 处理机调度**。",
-  "先说这节课要解决什么问题——\nCPU 一次只能运行一个进程，但系统里常常同时有很多进程想运行。" +
-  "**先让谁用 CPU、让多久、什么时候打断、什么时候切换**，管理这套规则就是处理机调度。",
-  "这节课有 **6 个知识点**：\n调度是什么 · 三级调度 · 调度评价指标 · FCFS 与 SJF · " +
-  "抢占式与非抢占式 · 时间片轮转与多级反馈队列。",
-  "上课方式是这样：**先看一段教学视频**，然后我们按 4 个阶段走——\n" +
-  "引导学习 → 总结复述 → 深入思考 → 课堂讨论。",
-  "准备好了吗？下面开始播放教学视频。"
-];
+
+/* ── mock 后端：扮演编排器 ─────────────────────────────────
+   USE_MOCK 为 true 时由它决定 host_phase 怎么演进 ——
+   前端是纯粹跟随的，所以这里的演进规则只是「扮演」，
+   真后端就绪后整段不用。
+
+   真后端的行为见 ORCHESTRATOR.md §6：judge_advance 按真实时钟
+   （stage_elapsed_minutes vs stage_budget_minutes）、证据、
+   以及老师配的 advance_policy 判定是否切幕。这里简化成「按输入切」。
+
+   ⚠️ mock 的状态在页面刷新后会重置，但 sessionId 是持久化的 ——
+      两者对不上。真后端用 checkpointer 按 session_id 存状态，没这个问题。
+   ─────────────────────────────────────────────────────────── */
+
+var mockPhase = "uninitialized";
+
+/* 各幕的台词。真后端由模型生成，这里写死只为让界面能跑通 */
+var MOCK_SCRIPT = {
+  intro:
+    "你好！我是这节课的 AI 老师。\n" +
+    "今天我们一起学 **第 3 章 处理机调度**。\n\n" +
+    "先说这节课要解决什么问题——\n" +
+    "CPU 一次只能运行一个进程，但系统里常常同时有很多进程想运行。" +
+    "**先让谁用 CPU、让多久、什么时候打断、什么时候切换**，" +
+    "管理这套规则就是处理机调度。\n\n" +
+    "这节课有 **6 个知识点**：\n" +
+    "调度是什么 · 三级调度 · 调度评价指标 · FCFS 与 SJF · " +
+    "抢占式与非抢占式 · 时间片轮转与多级反馈队列。\n\n" +
+    "上课方式是这样：**先看一段教学视频**，然后我们按顺序往下走。\n" +
+    "准备好了吗？下面开始播放教学视频。",
+  guided_learning:
+    "好，那我们开始。**先看一段教学视频**，看完再往下走。\n\n" +
+    "看的过程中有问题随时打断我，我会先记下来，等这段讲完一起处理。",
+  recap_discussion:
+    "视频看完了。现在轮到你了——**用你自己的话，把刚才学的讲一遍**。\n\n" +
+    "不用翻资料，想到多少写多少。写不出来的地方，正是需要补的地方。",
+  deep_inquiry:
+    "复述得不错。接下来**换个角度再想一层**——\n" +
+    "三个视角，一个一个来。",
+  class_discussion:
+    "三个视角都答完了。现在**进入全班讨论**，看看同学们怎么想。",
+  ending:
+    "时间到了，今天就到这里。刚才讨论里「公平 vs 效率」这个矛盾，" +
+    "大家在课后可以继续想 —— 它不只出现在操作系统里。"
+};
+
+function mockChat(payload) {
+  var text = String((payload && payload.message) || "").trim();
+
+  function reply(messageText, nextPhase, introComplete) {
+    if (nextPhase) mockPhase = nextPhase;
+    return {
+      ok: true,
+      message: { text: messageText, speech: "" },
+      hostPhase: mockPhase,
+      introComplete: !!introComplete
+    };
+  }
+
+  return delay(700).then(function () {
+
+    /* ── 控制消息优先 ──
+       它们和「当前处于哪一幕」无关。放在阶段分支之后会被抢走：
+       比如视频结束时 phase 还是 intro，就会被「介绍讲完」那条截胡。 */
+
+    if (text === VIDEO_END_EVENT) {
+      if (mockPhase === "intro" || mockPhase === "guided_learning") {
+        return reply(MOCK_SCRIPT.recap_discussion, "recap_discussion");
+      }
+      return reply("好。");
+    }
+
+    if (text === CONTINUE_EVENT) {
+      if (mockPhase === "recap_discussion") {
+        return reply(MOCK_SCRIPT.deep_inquiry, "deep_inquiry");
+      }
+      if (mockPhase === "deep_inquiry") {
+        return reply(MOCK_SCRIPT.class_discussion, "class_discussion");
+      }
+      return reply("好，我们继续。");
+    }
+
+    if (text === CLASS_END_EVENT) {
+      return reply(MOCK_SCRIPT.ending, "ending");
+    }
+
+    /* ── 以下是按阶段走的普通轮次 ── */
+
+    /* 开课 —— uninitialized → intro */
+    if (mockPhase === "uninitialized") {
+      return reply(MOCK_SCRIPT.intro, "intro", true);
+    }
+
+    /* 介绍讲完，进引导学习 */
+    if (mockPhase === "intro") {
+      return reply(MOCK_SCRIPT.guided_learning, "guided_learning");
+    }
+
+    /* 学生在课上提问 —— 引导学习期间只记下，不展开讲 */
+    return reply("记下了。等这一段讲完我们一起处理 👌");
+  });
+}
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -127,11 +209,36 @@ export var MOCK_INTRO = [
    学生端届时经平台接口取已发布的成片地址。
    ═══════════════════════════════════════════════════════════ */
 
+/* ── 控制消息 ─────────────────────────────────────────────
+   学生的某些动作不是「一轮对话」（看完视频、点继续），
+   约定成以 / 开头的消息，走同一个 /api/chat 通道发给后端，
+   由后端的 classify_turn 识别类型。
+
+   前端不自己决定下一步 —— 发完之后等后端的 host_phase。
+   ═══════════════════════════════════════════════════════════ */
+
+export var CLASS_START_EVENT = "/上课开始";  /* 学生点了「开始上课」*/
+export var VIDEO_END_EVENT   = "/视频结束";  /* 视频播完，或学生点了「看完了」*/
+export var CONTINUE_EVENT    = "/继续";      /* 学生主动请求进入下一幕 */
+export var CLASS_END_EVENT   = "/下课";      /* 学生请求结束本节课 */
+
+/* 本地测试视频（H.264 / MP4 / 42.8 秒）。
+   serve.mjs 支持 Range 请求，进度条能拖。
+   真实接入后由后端返回老师端生成的成片地址。
+   注：这个文件的 moov 在末尾，生产环境应先做 faststart
+       （ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4），
+       否则浏览器要下完整个文件才能开播。本地测试无所谓。 */
+var MOCK_VIDEO = {
+  url: "/test_information/test_vedio.mp4",
+  poster: "",
+  duration: 42.8,
+  title: "处理机调度 · 教学视频（本地测试片）",
+  source: "test"
+};
+
 export function fetchLessonVideo(lessonId) {
   if (USE_MOCK) {
-    return delay(320).then(function () {
-      return null;   /* 尚未接入 → 页面显示占位 */
-    });
+    return delay(320).then(function () { return MOCK_VIDEO; });
   }
   return request("GET", "/api/lesson/video?lessonId=" + encodeURIComponent(lessonId))
     .then(function (r) { return r.video; });

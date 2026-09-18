@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 import { $, el, renderInline, replayEntryAnimation } from "./ui.js";
-import { reviewSummary } from "./api.js";
+import { reviewSummary, CONTINUE_EVENT } from "./api.js";
 
 /* 引导问题：点一下插入到文本框，给写不出来的学生一个抓手。
    内容对应 KNOWLEDGE-BASE.md 里各知识点的「检测问题」 */
@@ -91,7 +91,6 @@ export function createStage(ctx) {
       writeView.hidden = true;
       reviewView.hidden = false;
       replayEntryAnimation(reviewView);
-      ctx.rail.setPhase("总结复述");
     }).catch(function (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = "提交给 AI 看";
@@ -173,13 +172,19 @@ export function createStage(ctx) {
       submitBtn.addEventListener("click", submit);
 
       $("summary-revise").addEventListener("click", backToWrite);
-      nextBtn.addEventListener("click", function () { ctx.advance("reflect"); });
+      /* 保留手动推进，但推不推由后端判定 —— 前端只发请求 */
+      nextBtn.addEventListener("click", function () {
+        nextBtn.disabled = true;
+        ctx.sendControl(CONTINUE_EVENT).catch(function (err) {
+          nextBtn.disabled = false;
+          ctx.toast("发送失败：" + err.message);
+        });
+      });
 
       updateCount();
     },
 
     enter: function () {
-      ctx.rail.setPhase("总结复述");
 
       /* 已提交过就停在反馈，否则回到写作态 */
       if (submitted) {

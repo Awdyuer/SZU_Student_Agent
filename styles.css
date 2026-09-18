@@ -399,83 +399,6 @@ body::before {
 
 .panel--grow { flex: 1; display: flex; flex-direction: column; }
 
-/* ── 4 阶段进度轨 ────────────────────────────────────────── */
-.rail {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rail__step {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-
-  padding-top: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-3);
-  text-align: center;
-  transition: color .3s var(--ease);
-}
-
-/* 连接线：用 background-size 从 0% 长到 100% 来做「填充」动画 */
-.rail__step::before {
-  content: "";
-  position: absolute;
-  top: 7px;
-  left: -50%;
-  width: 100%;
-  height: 2px;
-  border-radius: 1px;
-
-  background-color: var(--hairline);
-  background-image: linear-gradient(var(--blue), var(--blue));
-  background-repeat: no-repeat;
-  background-size: 0% 100%;
-  transition: background-size .55s var(--ease-out);
-}
-.rail__step:first-child::before { display: none; }
-
-/* 圆点 */
-.rail__dot {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--surface-solid);
-  box-shadow: inset 0 0 0 2px var(--hairline);
-  transition: all .35s var(--ease-out);
-}
-
-.rail__step.is-done { color: var(--text-2); }
-.rail__step.is-done::before { background-size: 100% 100%; }
-.rail__step.is-done .rail__dot {
-  background: var(--blue);
-  box-shadow: inset 0 0 0 2px var(--blue);
-}
-
-.rail__step.is-current {
-  color: var(--text-1);
-  font-weight: 600;
-}
-.rail__step.is-current .rail__dot {
-  background: var(--blue);
-  box-shadow:
-    inset 0 0 0 2px var(--blue),
-    0 0 0 5px rgba(0, 122, 255, .18);
-  transform: translateX(-50%) scale(1.12);
-}
-
 /* ── 占位 ────────────────────────────────────────────────── */
 .placeholder {
   flex: 1;
@@ -655,17 +578,6 @@ body::before {
 }
 .btn[disabled]:hover { filter: none; }
 .btn[disabled]:active { transform: none; }
-
-/* ── 进度轨容器 ──────────────────────────────────────────── */
-.rail-wrap {
-  padding: 22px 26px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-rest);
-  -webkit-backdrop-filter: saturate(180%) blur(24px);
-  backdrop-filter: saturate(180%) blur(24px);
-}
 
 /* ── AI 对话 ─────────────────────────────────────────────── */
 .stage--chat {
@@ -1109,22 +1021,6 @@ body::before {
 @keyframes veilCard {
   from { opacity: 0; transform: translateY(14px) scale(.94); }
   to   { opacity: 1; transform: none; }
-}
-
-.phase-veil__num {
-  display: grid;
-  place-items: center;
-  width: 74px;
-  height: 74px;
-  margin: 0 auto 22px;
-
-  font-size: 30px;
-  font-weight: 700;
-  color: #fff;
-
-  background: linear-gradient(160deg, #4da3ff, var(--blue));
-  border-radius: 50%;
-  box-shadow: 0 12px 34px rgba(0, 122, 255, .38);
 }
 
 .phase-veil__title {
@@ -1826,11 +1722,6 @@ body::before {
   .card      { min-height: 0; padding: 28px 26px 24px; gap: 20px; }
   .card__title { font-size: 26px; }
   .view      { padding: 24px 22px 36px; }
-  .rail      { grid-template-columns: 1fr; gap: 14px; }
-  .rail__step { flex-direction: row; justify-content: flex-start; padding-top: 0; }
-  .rail__step::before { display: none; }
-  .rail__dot { position: static; transform: none; flex: none; }
-  .rail__step.is-current .rail__dot { transform: scale(1.12); }
 
   /* 课中三阶段 */
   .lesson        { padding: 32px 24px 28px; }
@@ -1838,8 +1729,6 @@ body::before {
   .lesson__meta  { gap: 18px; margin: 24px 0 26px; padding: 18px 0; }
   .lesson__num   { font-size: 21px; }
   .btn--primary  { width: 100%; padding: 15px 28px; }
-
-  .rail-wrap     { padding: 20px; }
   .msg           { max-width: 92%; }
   .chat          { padding: 20px 16px; }
   .composer      { padding: 12px; }
@@ -1870,8 +1759,6 @@ body::before {
 
   .done              { padding: 34px 26px 30px; }
   .done__title       { font-size: 25px; }
-
-  .phase-veil__num   { width: 62px; height: 62px; font-size: 26px; margin-bottom: 18px; }
   .phase-veil__title { font-size: 25px; }
 
   .theme-switch      { top: 16px; right: 16px; }

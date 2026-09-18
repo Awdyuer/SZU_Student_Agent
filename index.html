@@ -159,15 +159,6 @@
         </div>
       </div>
 
-      <!-- ═══ 课中通用：4 阶段进度轨 ═══ -->
-      <div class="rail-wrap" id="rail-wrap" hidden>
-        <ol class="rail" id="rail">
-          <li class="rail__step is-current"><span class="rail__dot"></span>引导学习</li>
-          <li class="rail__step"><span class="rail__dot"></span>总结复述</li>
-          <li class="rail__step"><span class="rail__dot"></span>深入思考</li>
-          <li class="rail__step"><span class="rail__dot"></span>课堂讨论</li>
-        </ol>
-      </div>
 
       <!-- ═══ 阶段 1-b：AI 对话 ═══ -->
       <div class="stage stage--chat" id="stage-chat" hidden>
@@ -195,8 +186,10 @@
               <p class="video__title" id="video-title">教学视频</p>
               <p class="video__sub" id="video-sub">老师端生成</p>
             </div>
+            <!-- 两种通知方式之一：没看完也能点，学生说了算。
+                 另一种是视频自然播完时自动触发 -->
             <button class="btn btn--ghost" id="btn-skip-video" type="button">
-              看完了，进入下一阶段
+              看完了，继续
             </button>
           </div>
         </div>
@@ -371,8 +364,7 @@
 <!-- ═══════════ 阶段过渡遮罩 ═══════════ -->
 <div class="phase-veil" id="phase-veil" hidden aria-hidden="true">
   <div class="phase-veil__card">
-    <span class="phase-veil__num" id="veil-num">2</span>
-    <p class="phase-veil__title" id="veil-title">总结复述</p>
+    <p class="phase-veil__title" id="veil-title"></p>
     <p class="phase-veil__desc" id="veil-desc"></p>
   </div>
 </div>
