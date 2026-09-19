@@ -1,6 +1,6 @@
 # 前端架构与运行流程
 
-学生端 AI 课堂前端。**零依赖、零构建**，源码就是运行代码。
+学生端 AI 课堂前端，现运行于 **Next.js App Router + React**。课堂交互位于 Client Component，原有阶段状态机暂存于 `src/legacy` 兼容层。
 
 **前端是块显示屏，后端是导演。** 演到哪一幕由后端的 `host_phase` 决定，前端只负责把它显示出来。
 
@@ -8,20 +8,16 @@
 
 ---
 
-## 技术选型：为什么不用框架
+## 技术选型
 
-| | 传统 React/Vue 项目 | 本项目 |
+| | 本项目 |
 | --- | --- | --- |
-| 依赖 | 几百 MB `node_modules` | **0** |
-| 构建 | `npm install` + 打包器 | **无** |
-| 启动 | 装依赖、起 dev server | `node serve.mjs` 或双击 `start.cmd` |
-| 部署 | 构建产物 + 静态托管 | **源码就是运行代码** |
+| UI | React Client Component + 现有课堂兼容层 |
+| 路由与构建 | Next.js App Router / Turbopack |
+| 启动 | `npm install` 后执行 `npm run dev` |
+| 部署 | `npm run build` 后由 Next.js 启动或平台托管 |
 
-做法是用**浏览器原生的 ES 模块** —— `import` 直接写相对路径，浏览器自己解析，不需要打包器。
-
-**代价**：不能双击 `index.html` 打开（`file://` 协议下 ES 模块和 `fetch` 都会被拦），必须走 HTTP。
-
-**收益**：任何装了 Node 的机器，clone 下来一句命令就能跑，没有"环境不对"这一说。
+迁移阶段优先保持课堂行为等价：Next.js 负责入口、布局、全局样式与生产构建，`src/legacy` 保留已经验证过的阶段推进与 Mock API。后续可以按阶段替换为 React 组件，而无需改动后端契约。
 
 ---
 
@@ -197,23 +193,16 @@ flowchart TD
 
 | 文件 | 行数 | 职责 |
 | --- | ---: | --- |
-| `js/api.js` | 492 | **全部后端接口 + mock** —— 对接后端只改这一个文件 |
-| `js/app.js` | 385 | 编排层：路由 + 界面跟随 `host_phase` |
-| `js/stage-class.js` | 350 | 课前 / AI 对话 / 教学视频 |
-| `js/stage-discuss.js` | 219 | 课堂讨论（老师 / 同学 / 我 三种角色） |
-| `js/stage-summary.js` | 215 | 总结复述（写作区 + 结构化反馈） |
-| `js/stage-reflect.js` | 195 | 深入思考（三张卡逐个展开） |
-| `js/theme.js` | 188 | 浅色 / 深色 / 跟随系统 |
-| `js/ui.js` | 92 | 共用工具：元素构造、转义、动画辅助 |
-| `js/phases.js` | 63 | **阶段词表** —— `host_phase` 与界面的唯一映射 |
-| `js/veil.js` | 46 | 阶段过渡动效 |
-| `js/stage-done.js` | 45 | 结束态 |
-| `js/view-review.js` | 25 | 课后（内容待定） |
-| `index.html` | 374 | 全部页面结构 |
-| `styles.css` | 1778 | 设计系统（Apple HIG） |
-| `serve.mjs` | 146 | 本地预览服务器（支持 Range，视频能拖进度条） |
-
-**合计 4613 行，零依赖、零 `node_modules`。**
+| `src/app/layout.js` | Next.js 根布局、元数据和主题首屏防闪 |
+| `src/app/page.js` | `/` 路由入口 |
+| `src/app/globals.css` | 全局设计系统 |
+| `src/components/StudentApp.js` | 课堂 Client Component 边界 |
+| `src/components/legacyMarkup.js` | 迁移期间保留的页面结构 |
+| `src/legacy/api.js` | **全部后端接口 + mock** |
+| `src/legacy/app.js` | 编排层：路由 + 界面跟随 `host_phase` |
+| `src/legacy/stage-*.js` | 各课堂阶段的现有交互逻辑 |
+| `src/legacy/theme.js` | 浅色 / 深色 / 跟随系统 |
+| `src/legacy/phases.js` | `host_phase` 与界面的唯一映射 |
 
 ### 阶段模块的统一契约
 
@@ -292,12 +281,8 @@ graph LR
 ## 附：本地启动
 
 ```bash
-node serve.mjs               # → http://127.0.0.1:5173
-PORT=8080 node serve.mjs     # 换端口
+npm install
+npm run dev                  # → http://localhost:3000
 ```
 
-Windows 上双击 `start.cmd` 即可，它会检查 Node、把地址复制到剪贴板。
-
-> ⚠️ 不能直接双击 `index.html`。页面用了 ES 模块和 `fetch`，`file://` 协议下都会被浏览器拦。
-
-接口契约、请求响应示例、后端需要补齐的能力清单，见 [后端接口说明.md](../后端接口说明.md)。
+接口契约、请求响应示例、后端需要补齐的能力清单，见 [后端接口说明](../api/后端接口说明.md)。

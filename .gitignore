@@ -1,11 +1,16 @@
-# 依赖（本项目零依赖，留个保险）
+# Next.js 依赖与构建产物
 node_modules/
+.next/
+out/
+
+# 本地环境变量（模板 .env.example 保留在仓库）
+.env*.local
 
 # 本地预览与截图
 .preview/
 
 # 本地测试素材（24MB 的测试视频，不进 git 历史）
-test_information/
+public/test_information/
 
 # 开发时的临时文件（测试脚本、诊断页）
 .t-*.js

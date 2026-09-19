@@ -49,7 +49,7 @@
 }
 
 /* 深色主题由 html[data-theme="dark"] 驱动，不再绑死系统设置。
-   「跟随系统」由 js/theme.js 监听 media query 后代为设置该属性 ——
+   「跟随系统」由 src/legacy/theme.js 监听 media query 后代为设置该属性 ——
    这样 CSS 只需要一套深色规则，不必写两遍。 */
 :root[data-theme="dark"] {
   color-scheme: dark;

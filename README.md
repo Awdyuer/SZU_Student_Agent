@@ -2,7 +2,7 @@
 
 面向学生的 AI 课堂前端。把「每节课 4 阶段逐步加深」的教学模型做成学生看得见的界面。
 
-原生 HTML / CSS / ES 模块 —— **零依赖、零构建**，`node serve.mjs` 即可运行。
+基于 **Next.js App Router + React** 实现。课堂主体运行在 Client Component 中，后端仍保持为独立服务；前端只根据后端下发的 `hostPhase` 更新课堂阶段。
 
 ---
 
@@ -19,7 +19,7 @@
 
 页头右上方始终显示**当前处于哪一幕**（课程介绍 / 引导学习 / 总结复述 …），切幕时有一道全屏毛玻璃过渡。
 
-**前端不决定演到哪一幕。** 每次后端响应回来后比对 `hostPhase`，变了才切界面 —— 切幕时机由后端的编排器 `judge_advance` 决定（真实时钟 + 证据 + 策略，见 `docs/ORCHESTRATOR.md`）。
+**前端不决定演到哪一幕。** 每次后端响应回来后比对 `hostPhase`，变了才切界面 —— 切幕时机由后端的编排器 `judge_advance` 决定（真实时钟 + 证据 + 策略，见 `docs/architecture/ORCHESTRATOR.md`）。
 
 ---
 
@@ -29,29 +29,102 @@
 - **课堂**：完整的 4 阶段流程，从课前课程卡一路走到结束态
 - **课后**：预留中，见「已知限制」
 - **深浅色主题**：浅色 / 深色 / 跟随系统，右上角切换，带首屏防闪
-- **视频**：本地测试片（H.264）能播、能拖进度条（`serve.mjs` 支持 Range）；播完自动通知后端，也可手动点「看完了」
+- **视频**：本地测试片（H.264）能播、能拖进度条；播完自动通知后端，也可手动点「看完了」
 - **响应式**：窄屏卡片改单列
 - **动效**：全部 CSS 实现，无动画库；`prefers-reduced-motion` 下自动降级为直接切换
 - **可访问性**：键盘可达、焦点管理、`aria-live` 会话区
 
 ---
 
-## 快速开始
+## 环境配置
 
-需要 **Node.js ≥ 20**。不需要 `npm install`。
+### 环境要求
 
-### Windows
+- Node.js **20.9 或更高版本**
+- npm（随 Node.js 一起安装）
+- Chrome 111+、Edge 111+、Firefox 111+ 或 Safari 16.4+
 
-双击 **`start.cmd`** —— 它会检查 Node、把地址复制到剪贴板，然后打印出来。粘贴到浏览器即可。关闭窗口就是停止服务。
-
-### 手动
+可以先确认本机环境：
 
 ```bash
-node serve.mjs               # → http://127.0.0.1:5173
-PORT=8080 node serve.mjs     # 换端口
+node --version
+npm --version
 ```
 
-> ⚠️ 不能直接双击 `index.html`。页面用了 ES 模块和 `fetch`，`file://` 协议下都会被浏览器拦。
+### 后端地址
+
+项目默认使用本地 Mock 数据，不启动后端也能完整体验课堂流程。
+
+需要连接独立后端时，在项目根目录复制环境变量模板：
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env.local
+```
+
+```bash
+# macOS / Linux
+cp .env.example .env.local
+```
+
+然后修改 `.env.local`：
+
+```dotenv
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+同时把 `src/legacy/api.js` 中的 Mock 开关改为：
+
+```js
+export var USE_MOCK = false;
+```
+
+说明：
+
+- 不设置 `NEXT_PUBLIC_API_BASE_URL` 时，请求默认发送到当前前端域名下的 `/api`。
+- 前后端不同端口或域名时，后端需要允许前端地址进行 CORS 请求。
+- `.env.local` 必须放在项目根目录，不要放进 `src/`，也不要提交到 Git。
+- `NEXT_PUBLIC_` 变量会进入浏览器端代码，不能在其中保存密码、Token 或其他机密信息。
+- 修改 `.env.local` 后需要重新启动开发服务器；生产环境变量需要在执行 `npm run build` 前设置。
+
+## 快速启动
+
+在项目根目录依次执行：
+
+```bash
+# 1. 按 package-lock.json 安装确定版本的依赖
+npm ci
+
+# 2. 启动开发服务器
+npm run dev
+```
+
+浏览器打开：
+
+```text
+http://localhost:3000
+```
+
+如果 `3000` 端口被占用，Next.js 会提示实际使用的地址，也可以手动指定端口：
+
+```bash
+npm run dev -- --port 3001
+```
+
+### 生产环境启动
+
+```bash
+# 先执行代码检查
+npm run lint
+
+# 创建生产构建
+npm run build
+
+# 启动生产服务器
+npm start
+```
+
+生产服务器默认访问地址同样是 `http://localhost:3000`。
 
 ---
 
@@ -59,29 +132,23 @@ PORT=8080 node serve.mjs     # 换端口
 
 ```
 .
-├── index.html          全部页面结构（入口 / 课堂 7 个 stage / 课后）
-├── styles.css          全部样式（设计令牌 + 组件）
-├── start.cmd           Windows 启动器（双击即可，GBK 编码）
-├── serve.mjs           本地预览服务器（支持 Range，视频能拖进度条）
+├── src/
+│   ├── app/
+│   │   ├── layout.js       根布局、页面元数据与主题首屏防闪
+│   │   ├── page.js         学生端入口页面（Server Component）
+│   │   └── globals.css     全局设计令牌与组件样式
+│   ├── components/
+│   │   ├── StudentApp.js   课堂客户端边界与初始化入口
+│   │   └── legacyMarkup.js 迁移期间保留的页面结构
+│   └── legacy/             迁移兼容层：课堂状态机、阶段与 API
+├── public/                 Next.js 静态资源目录
+├── next.config.mjs     Next.js 配置
+├── package.json        依赖与开发/构建命令
 ├── docs/
-│   ├── ARCHITECTURE.md   ★ 架构与运行流程（5 张 Mermaid 流程图）
-│   ├── RUNTIME.md        ★ 运行时流程（24 步，从加载到下课）
-│   ├── 后端接口说明.md    ★ 接口契约与后端待办
-│   ├── ORCHESTRATOR.md     后端编排器规范（后端给的，前端跟随它）
-│   └── images/             上面前两张的 SVG 成品，PPT 可直接插
-└── js/
-    ├── app.js          编排层：路由 + 界面跟随 hostPhase
-    ├── api.js          ★ 全部后端接口 + mock（对接后端只改这一个文件）
-    ├── phases.js       阶段词表：host_phase → 界面 / 显示名 / 过渡说明
-    ├── ui.js           共用工具：元素构造、转义、动画辅助
-    ├── veil.js         阶段过渡动效
-    ├── theme.js        浅色 / 深色 / 跟随系统
-    ├── stage-class.js  阶段 1：课前 → AI 对话 → 教学视频
-    ├── stage-summary.js 阶段 2：总结复述
-    ├── stage-reflect.js 阶段 3：深入思考
-    ├── stage-discuss.js 阶段 4：课堂讨论
-    ├── stage-done.js   课程结束态
-    └── view-review.js  课后
+│   ├── architecture/       架构、运行流程、编排器规范和架构图
+│   └── api/                后端接口契约
+├── .env.example        后端地址配置示例
+└── jsconfig.json       `@/` 指向 `src/`
 ```
 
 **路由**（hash，刷新与前进后退都能用）
@@ -98,24 +165,17 @@ PORT=8080 node serve.mjs     # 换端口
 
 ## 技术说明
 
-**没上框架。** 课堂的 7 个 stage 是一个显式的状态机（`js/app.js`），每个阶段模块只暴露 `mount / enter / leave / reset` 四个方法。选原生是因为这个项目的界面状态是有限且明确的，框架带来的抽象成本大于收益。
+**Next.js 负责应用入口、根布局、页面元数据、全局样式和生产构建。** 当前迁移优先保证行为等价：原有课堂编排模块作为客户端兼容层挂载，后续可以按阶段逐步替换成独立 React 组件，而不需要再次改动接口契约。
 
-**零构建。** 用浏览器原生的 ES 模块，`import` 直接写相对路径。代价是不能双击 HTML 打开，必须走 HTTP。
+**课堂主体是 Client Component。** 视频、主题、输入框、动画、`localStorage` 与实时会话都依赖浏览器能力；后端接口仍然通过 `src/legacy/api.js` 访问，不在 Next.js 中重复实现业务后端。
 
 **内容的可见性不依赖动画。** 入场动画没有填 `animation-fill-mode`，因为一旦动画没推进，`both` 会让元素永久停在 `opacity: 0` —— 那就成了「界面消失」而不是「少个过渡」。
 
 **主题只有两套规则。** `html[data-theme]` 只取 `light` / `dark`，「跟随系统」由 JS 监听 `matchMedia` 后代写，这样 CSS 不必把深色令牌写两遍。首屏防闪靠 `<head>` 里一段内联脚本在样式表之前定好属性。
 
-### Windows 上的两个坑（都已处理）
-
-- **`start.cmd` 存成 GBK，不是 UTF-8。** cmd.exe 按系统代码页逐字节解析批处理文件，UTF-8 的中文会把后面的行拆坏当成命令执行。
-- **`serve.mjs` 的输出全是 ASCII。** Node 往 stdout 写 UTF-8，Windows 控制台按代码页解码，中文会乱码。
-
----
-
 ## 后端对接
 
-**所有接口目前走 mock。** 改 `js/api.js` 顶部一行即可切换到真实请求：
+**所有接口目前走 mock。** 改 `src/legacy/api.js` 顶部一行即可切换到真实请求：
 
 ```js
 export var USE_MOCK = false;
@@ -123,10 +183,10 @@ export var USE_MOCK = false;
 
 前端其余代码一行都不用动 —— 各阶段模块只 import `api.js` 的函数，不直接写 URL。
 
-完整的接口契约、请求响应示例、以及后端需要补齐的能力清单，见 **[docs/后端接口说明.md](docs/后端接口说明.md)**。
+完整的接口契约、请求响应示例、以及后端需要补齐的能力清单，见 **[后端接口说明](docs/api/后端接口说明.md)**。
 
-**想看它运行时一步步发生什么** → [docs/RUNTIME.md](docs/RUNTIME.md)（24 步）
-**想看架构图和运行流程** → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)（5 张流程图）
+**想看它运行时一步步发生什么** → [运行时流程](docs/architecture/RUNTIME.md)（24 步）
+**想看架构图和运行流程** → [前端架构](docs/architecture/ARCHITECTURE.md)（5 张流程图）
 
 ---
 
@@ -136,4 +196,4 @@ export var USE_MOCK = false;
 - 课后页面是空占位，接口契约已备好但未实现。
 - 阶段 4 的多人讨论是单人 mock（后端目前 `student_id` 硬编码，无班级/讨论组结构）。
 - 掌握度（0–5 星）在前端还没有展示。
-- 目前只有一节课，不提供选课；多课程的接口契约写在 `docs/后端接口说明.md` 末尾。
+- 目前只有一节课，不提供选课；多课程的接口契约写在 `docs/api/后端接口说明.md` 末尾。

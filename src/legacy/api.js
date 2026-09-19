@@ -10,6 +10,9 @@ import { delay } from "./ui.js";
 /* 后端就绪后置为 false */
 export var USE_MOCK = true;
 
+/* 独立部署时通过 .env.local 配置后端地址；留空则继续请求当前域名。 */
+var API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+
 
 /* ── 请求辅助 ────────────────────────────────────────────── */
 
@@ -19,7 +22,7 @@ function request(method, url, body) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
   }
-  return fetch(url, options).then(function (res) {
+  return fetch(API_BASE_URL + url, options).then(function (res) {
     if (!res.ok) throw new Error("HTTP " + res.status);
     return res.json();
   });
@@ -223,7 +226,7 @@ export var CONTINUE_EVENT    = "/继续";      /* 学生主动请求进入下一
 export var CLASS_END_EVENT   = "/下课";      /* 学生请求结束本节课 */
 
 /* 本地测试视频（H.264 / MP4 / 42.8 秒）。
-   serve.mjs 支持 Range 请求，进度条能拖。
+   文件放在 public/test_information，由 Next.js 作为静态资源提供。
    真实接入后由后端返回老师端生成的成片地址。
    注：这个文件的 moov 在末尾，生产环境应先做 faststart
        （ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4），

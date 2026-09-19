@@ -2,17 +2,17 @@
 
 一次课堂从打开页面到下课，浏览器里依次发生了什么。
 
-> 配套：`ARCHITECTURE.md`（架构与流程图）、`后端接口说明.md`（接口契约）
+> 配套：`ARCHITECTURE.md`（架构与流程图）、`../api/后端接口说明.md`（接口契约）
 
 ---
 
 ## A · 页面加载
 
-1. **浏览器请求页面** → `serve.mjs` 返回 `index.html`
-2. **`<head>` 里的内联脚本先跑** → 读 `localStorage` 或系统偏好，定下 `data-theme`（在样式表之前，避免深色系统下闪一帧白）
-3. **加载 `styles.css`** → 主题已定，不会渲染错配色
-4. **浏览器顺 `import` 拉 12 个 ES 模块** → 这就是"零构建"的代价（12 个请求而不是 1 个打包文件）
-5. **`app.js` 执行** → 建 8 个模块实例 → 各模块 `mount()` 绑自己的事件 → 按 hash 显示入口页
+1. **浏览器请求页面** → Next.js 返回预渲染的 `/` 页面
+2. **根布局中的内联脚本先跑** → 读 `localStorage` 或系统偏好，定下 `data-theme`（在样式表之前，避免深色系统下闪一帧白）
+3. **加载 `src/app/globals.css`** → 主题已定，不会渲染错配色
+4. **React hydration** → `StudentApp` 变为可交互的 Client Component
+5. **动态加载 `src/legacy/app.js`** → 建 8 个模块实例 → 各模块 `mount()` 绑自己的事件 → 按 hash 显示入口页
 
 > 第 5 步之前不绑任何事件。`idle`/`chat`/`video` 指向**同一个实例**（同属「引导学习」那一幕）。
 
