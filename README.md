@@ -153,7 +153,7 @@ npm start
 ├── next.config.mjs     Next.js 配置
 ├── package.json        依赖与开发/构建命令
 ├── docs/
-│   ├── architecture/       架构、运行流程、编排器规范和架构图
+│   ├── architecture/       架构、运行流程、编排器规范和 Mermaid 流程图
 │   └── api/                后端接口契约
 ├── .env.example        后端地址配置示例
 └── jsconfig.json       `@/` 指向 `src/`
@@ -194,8 +194,8 @@ export var USE_MOCK = false;
 完整的接口契约、请求响应示例、以及后端需要补齐的能力清单，见 **[后端接口说明](docs/api/后端接口说明.md)**。
 
 **想看它运行时一步步发生什么** → [运行时流程](docs/architecture/RUNTIME.md)（24 步）
-**想看架构图和运行流程** → [前端架构](docs/architecture/ARCHITECTURE.md)（5 张流程图）
-**想看 Next.js、路由、课堂阶段与 API 的完整工作流** → [Next.js 前端工作流程](docs/architecture/NEXT_FRONTEND_WORKFLOW.md)
+**想看架构与模块职责** → [前端架构](docs/architecture/ARCHITECTURE.md)
+**想看 Next.js 启动、路由、课堂阶段与 API 流程图** → [Next.js 学生端前端流程图](docs/architecture/NEXT_FRONTEND_WORKFLOW.md)（Mermaid，可直接在 Markdown 中预览）
 
 ---
 

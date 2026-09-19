@@ -2,6 +2,8 @@
 
 学生端 AI 课堂前端，现运行于 **Next.js App Router + React**。课堂交互位于 Client Component，原有阶段状态机暂存于 `src/legacy` 兼容层。
 
+完整的启动、Hash 路由、课堂阶段和 API 流程图见 [Next.js 学生端前端流程图](NEXT_FRONTEND_WORKFLOW.md)。本文中的 Mermaid 图直接嵌入 Markdown，不依赖已删除的旧 SVG。
+
 **前端是块显示屏，后端是导演。** 演到哪一幕由后端的 `host_phase` 决定，前端只负责把它显示出来。
 
 教学模型是「一节课 4 个阶段」：引导学习 → 总结复述 → 深入思考 → 课堂讨论。
@@ -14,7 +16,7 @@
 | --- | --- | --- |
 | UI | React Client Component + 现有课堂兼容层 |
 | 路由与构建 | Next.js App Router / Turbopack |
-| 启动 | `npm install` 后执行 `npm run dev` |
+| 启动 | `npm ci` 后执行 `npm run dev`，Windows 可双击 `启动演示.cmd` |
 | 部署 | `npm run build` 后由 Next.js 启动或平台托管 |
 
 迁移阶段优先保持课堂行为等价：Next.js 负责入口、布局、全局样式与生产构建，`src/legacy` 保留已经验证过的阶段推进与 Mock API。后续可以按阶段替换为 React 组件，而无需改动后端契约。
@@ -187,8 +189,8 @@ flowchart TD
 
 ## 五、模块清单
 
-| 文件 | 行数 | 职责 |
-| --- | ---: | --- |
+| 文件 | 职责 |
+| --- | --- |
 | `src/app/layout.js` | Next.js 根布局、元数据和主题首屏防闪 |
 | `src/app/page.js` | `/` 路由入口 |
 | `src/app/globals.css` | 全局设计系统 |
@@ -202,15 +204,15 @@ flowchart TD
 
 ### 阶段模块的统一契约
 
-每个阶段模块只暴露四个方法：
+阶段模块通过统一的工厂函数接收 `ctx`；按需实现以下方法，`enter`、`leave`、`reset` 并非每个模块都必须具备：
 
 ```js
 export function createStage(ctx) {
   return {
-    mount(),          // 首次挂载：绑事件，只调一次
-    enter(stageName), // 进入该界面
-    leave(),          // 离开（清理定时器、停掉在途请求）
-    reset()           // 换课时清空状态
+    mount(),          // 可选：首次挂载时绑定事件，只调一次
+    enter(stageName), // 可选：进入该界面时更新内容
+    leave(),          // 可选：退出时清理资源
+    reset()           // 可选：重置模块状态
   };
 }
 ```

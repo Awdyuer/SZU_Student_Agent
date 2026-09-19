@@ -2,7 +2,7 @@
 
 一次课堂从打开页面到下课，浏览器里依次发生了什么。
 
-> 配套：`ARCHITECTURE.md`（架构与流程图）、`../api/后端接口说明.md`（接口契约）
+> 配套：[前端架构](ARCHITECTURE.md)、[Next.js 学生端前端流程图](NEXT_FRONTEND_WORKFLOW.md)、[后端接口说明](../api/后端接口说明.md)。流程图以 Mermaid Markdown 为准，不再依赖旧 SVG。
 
 ---
 
