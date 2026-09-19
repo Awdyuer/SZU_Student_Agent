@@ -10,14 +10,10 @@
    这一层，接口契约见 api.js 末尾。
    ═══════════════════════════════════════════════════════════ */
 
-import {
-  $, visibleRoot, waitForAnimation, replayEntryAnimation,
-  reduceMotion, showToast
-} from "./ui.js";
+import { $, visibleRoot, showToast } from "./ui.js";
 
 import { fetchLesson, sendChat, LESSON_ID } from "./api.js";
 import { uiOf, labelOf, isKnown } from "./phases.js";
-import { createVeil } from "./veil.js";
 import { createThemeSwitch } from "./theme.js";
 import { createStage as createClassStage } from "./stage-class.js";
 import { createView as createReviewView } from "./view-review.js";
@@ -57,7 +53,6 @@ var lesson = null;
 /* 后端当前说的那一幕。null 表示还没跟后端对过话 */
 var hostPhase = null;
 
-var veil = null;
 var themeSwitch = null;
 
 
@@ -88,36 +83,24 @@ function go(hash) {
   location.hash = hash;
 }
 
-/* 切视图是异步的（要等退场动画）。用队列串起来，而不是用布尔标志
-   把后来的请求丢掉 —— 丢掉会让「点课堂后立刻再点」直接卡住，
-   因为第二次跳转被静默忽略，目标视图永远不会出现。 */
-var viewChain = Promise.resolve();
-
 function showView(targetId) {
-  viewChain = viewChain.then(function () { return switchView(targetId); });
-  return viewChain;
+  switchView(targetId);
 }
 
-async function switchView(targetId) {
+function switchView(targetId) {
   var target = $(targetId);
   var current = visibleRoot();
   if (!target || current === target) return;
 
-  if (current && !reduceMotion) {
-    current.classList.add("is-leaving");
-    await waitForAnimation(current, 320);
-    current.classList.remove("is-leaving");
-  }
   if (current) current.hidden = true;
   target.hidden = false;
-  replayEntryAnimation(target);
 
   var heading = target.querySelector("h1, h2");
   if (heading) {
     heading.setAttribute("tabindex", "-1");
     heading.focus({ preventScroll: true });
   }
-  window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function renderRoute() {
@@ -166,7 +149,6 @@ var PANE = {
 };
 
 var currentStage = "idle";
-var phaseSwitching = false;
 
 var owners = {};
 var classStage = null;    /* 课堂模块实例：idle/chat/video 三个子阶段共用 */
@@ -225,9 +207,6 @@ function setStage(name) {
     if (node) node.hidden = key !== name;
   });
 
-  var pane = $(PANE[name]);
-  if (pane) replayEntryAnimation(pane);
-
   /* 先按当前 host_phase 给个默认状态，owner.enter 可以覆盖成子状态 */
   setStatus(hostPhase ? labelOf(hostPhase) : "");
 
@@ -249,7 +228,6 @@ function applyServerTurn(res) {
 
   if (phase === hostPhase) return;      /* 没变，什么都不做 */
 
-  var from = hostPhase;
   hostPhase = phase;
   setStatus(labelOf(phase));
 
@@ -261,16 +239,7 @@ function applyServerTurn(res) {
   if (target === currentStage) return;
   if (phase === "guided_learning" && currentStage === "video") return;
 
-  /* 从「课前」进第一幕是开课，不是切幕，不播遮罩 */
-  if (from === null) {
-    setStage(target);
-    return;
-  }
-
-  if (phaseSwitching) return;
-  phaseSwitching = true;
-  veil.play(phase, function () { setStage(target); })
-    .finally(function () { phaseSwitching = false; });
+  setStage(target);
 }
 
 /* 去重：chat/video 和 idle 是同一个模块实例 */
@@ -356,7 +325,6 @@ document.addEventListener("keydown", function (e) {
    启动
    ═══════════════════════════════════════════════════════════ */
 
-veil = createVeil();
 themeSwitch = createThemeSwitch();
 
 var ctx = ctxFor();

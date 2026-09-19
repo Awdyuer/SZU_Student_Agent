@@ -7,18 +7,12 @@
      GET /api/courses/<courseId>/lessons
    ═══════════════════════════════════════════════════════════ */
 
-import { $, replayEntryAnimation } from "./ui.js";
-
 export function createView() {
-
-  var pane = $("view-review");
 
   return {
     mount: function () {},
 
-    enter: function () {
-      replayEntryAnimation(pane);
-    },
+    enter: function () {},
 
     leave: function () {}
   };

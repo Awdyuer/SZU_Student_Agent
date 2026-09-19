@@ -34,26 +34,12 @@ export var LABEL_OF_PHASE = {
   ending:           "已结束"
 };
 
-/* 阶段过渡遮罩上的一行说明 */
-var DESC_OF_PHASE = {
-  intro:            "老师先介绍本节课的内容",
-  guided_learning:  "看视频、听讲解，随时可以提问",
-  recap_discussion: "用你自己的话，把刚学的讲一遍",
-  deep_inquiry:     "问一问为什么、能解决什么、和别的学科有什么关系",
-  class_discussion: "老师和同学们一起聊",
-  ending:           "本节课结束"
-};
-
 export function uiOf(phase) {
   return UI_OF_PHASE[phase] || null;
 }
 
 export function labelOf(phase) {
   return LABEL_OF_PHASE[phase] || "";
-}
-
-export function descOf(phase) {
-  return DESC_OF_PHASE[phase] || "";
 }
 
 /* 后端给了一个前端不认识的 phase 时，不崩、不切界面，只在控制台留痕。

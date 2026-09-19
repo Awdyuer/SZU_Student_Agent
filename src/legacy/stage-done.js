@@ -3,11 +3,10 @@
    四个阶段走完后收束：本节课覆盖的知识点 + 去课后的入口
    ═══════════════════════════════════════════════════════════ */
 
-import { $, el, replayEntryAnimation } from "./ui.js";
+import { $, el } from "./ui.js";
 
 export function createStage(ctx) {
 
-  var pane = $("stage-done");
   var list = $("done-kps");
 
   function renderKnowledgePoints() {
@@ -37,7 +36,6 @@ export function createStage(ctx) {
     enter: function () {
       ctx.setStatus("已结束");
       renderKnowledgePoints();
-      replayEntryAnimation(pane);
     },
 
     leave: function () {}

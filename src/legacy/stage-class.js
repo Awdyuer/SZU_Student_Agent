@@ -7,7 +7,7 @@
    由后端决定下一幕是什么。
    ═══════════════════════════════════════════════════════════ */
 
-import { $, el, icon, delay, renderInline, scrollToEnd, replayEntryAnimation } from "./ui.js";
+import { $, el, icon, delay, renderInline, scrollToEnd } from "./ui.js";
 import {
   sendChat, fetchLessonVideo,
   CLASS_START_EVENT, VIDEO_END_EVENT
@@ -34,7 +34,6 @@ export function createStage(ctx) {
     Object.keys(PANES).forEach(function (key) {
       PANES[key].hidden = key !== name;
     });
-    replayEntryAnimation(PANES[name]);
   }
 
   /* ── 课前：课程信息 ──────────────────────────────────── */

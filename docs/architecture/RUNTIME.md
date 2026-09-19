@@ -41,15 +41,15 @@
 12. **点「开始播放教学视频」** → 本地切到视频界面，**不发请求**
 13. **视频加载** → `GET /api/lesson/video` 拿地址 → `GET *.mp4`（浏览器会发多个 Range 请求）
 14. **视频播完**（`ended` 事件，或点「看完了」）→ `POST /api/chat` `/视频结束`
-15. **后端返回** `hostPhase: "recap_discussion"` → 播遮罩 → 写作区
+15. **后端返回** `hostPhase: "recap_discussion"` → 立即切到写作区
 16. **提交总结** → `POST /api/summary/review` → 四色反馈卡（空数组的块自动跳过）
 17. **点「进入下一阶段」** → `POST /api/chat` `/继续`（**推不推由后端判定**）
-18. **后端返回** `hostPhase: "deep_inquiry"` → 播遮罩 → 三张卡
+18. **后端返回** `hostPhase: "deep_inquiry"` → 立即切到三张卡
 19. **答三张卡** → 每张 `POST /api/reflection` → 卡内出现 AI 点评，收起输入区
-20. **点「进入课堂讨论」** → `POST /api/chat` `/继续` → `class_discussion` → 播遮罩 → 讨论区
+20. **点「进入课堂讨论」** → `POST /api/chat` `/继续` → `class_discussion` → 立即切到讨论区
 21. **讨论区加载** → `GET /api/discussion` → 讨论题 + 发言**逐条间隔 520ms 出现**
 22. **发言** → `POST /api/discussion` → 自己的发言追加，老师追问随后出现
-23. **点「结束本节课」** → `POST /api/chat` `/下课` → 收尾发言 + `hostPhase: "ending"` → 播遮罩 → 结束态
+23. **点「结束本节课」** → `POST /api/chat` `/下课` → 收尾发言 + `hostPhase: "ending"` → 立即切到结束态
 
 ---
 
@@ -68,13 +68,13 @@
     ↓
 后端返回 hostPhase
     ↓
-前端比对：变了 → 播遮罩 + 切界面（在遮罩覆盖下完成）
+前端比对：变了 → 立即切换界面，不播放页面或阶段切换动画
           没变 → 什么都不做
 ```
 
 **前端不参与"该不该切幕"的判断**——那是后端编排器的职责。
 
-**遮罩时序（约 0.9 秒）**：淡入 250ms → **在遮罩下换内容** → 停留 380ms → 淡出 220ms。界面切换发生在遮罩不透明的时候，学生看不到那一瞬。
+**切换时序**：更新 `hostPhase` → 映射目标 Stage → 同步更新显隐 → 调用目标模块的 `enter()`。消息、Toast、悬停等局部反馈动画仍独立保留。
 
 ---
 

@@ -46,7 +46,7 @@ export function renderInline(text) {
   return escapeHtml(text).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
-/* ── 视图与动画 ──────────────────────────────────────────── */
+/* ── 视图 ────────────────────────────────────────────────── */
 
 export function visibleRoot() {
   var nodes = document.querySelectorAll(".hub, .view");
@@ -54,22 +54,6 @@ export function visibleRoot() {
     if (!nodes[i].hidden) return nodes[i];
   }
   return null;
-}
-
-export function waitForAnimation(node, fallbackMs) {
-  return new Promise(function (resolve) {
-    var settled = false;
-    function finish() { if (!settled) { settled = true; resolve(); } }
-    node.addEventListener("animationend", finish, { once: true });
-    setTimeout(finish, fallbackMs);
-  });
-}
-
-/* 重新触发入场动画：先置 none 再强制回流，否则同一次动画不会重播 */
-export function replayEntryAnimation(node) {
-  node.style.animation = "none";
-  void node.offsetWidth;
-  node.style.animation = "";
 }
 
 export function scrollToEnd(node) {

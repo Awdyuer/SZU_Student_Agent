@@ -3,7 +3,7 @@
    写作区 → 提交 → AI 结构化反馈（讲对的 / 遗漏的 / 补充 / 关联）
    ═══════════════════════════════════════════════════════════ */
 
-import { $, el, renderInline, replayEntryAnimation } from "./ui.js";
+import { $, el, renderInline } from "./ui.js";
 import { reviewSummary, CONTINUE_EVENT } from "./api.js";
 
 /* 引导问题：点一下插入到文本框，给写不出来的学生一个抓手。
@@ -20,7 +20,6 @@ var MAX_LEN = 600;
 
 export function createStage(ctx) {
 
-  var pane = $("stage-summary");
   var writeView = $("summary-write");
   var reviewView = $("summary-review");
   var prompts = $("summary-prompts");
@@ -90,7 +89,6 @@ export function createStage(ctx) {
       renderReview(res.review);
       writeView.hidden = true;
       reviewView.hidden = false;
-      replayEntryAnimation(reviewView);
     }).catch(function (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = "提交给 AI 看";
@@ -156,7 +154,6 @@ export function createStage(ctx) {
   function backToWrite() {
     reviewView.hidden = true;
     writeView.hidden = false;
-    replayEntryAnimation(writeView);
     submitBtn.disabled = false;
     submitBtn.textContent = "重新提交";
   }
@@ -195,7 +192,6 @@ export function createStage(ctx) {
         reviewView.hidden = true;
         setTimeout(function () { input.focus(); }, 260);
       }
-      replayEntryAnimation(pane);
     },
 
     leave: function () {},

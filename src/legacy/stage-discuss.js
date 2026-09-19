@@ -7,7 +7,7 @@
       接口见 api.js 的 fetchDiscussion / postDiscussion。
    ═══════════════════════════════════════════════════════════ */
 
-import { $, el, delay, scrollToEnd, replayEntryAnimation, reduceMotion } from "./ui.js";
+import { $, el, delay, scrollToEnd, reduceMotion } from "./ui.js";
 import {
   fetchDiscussion, postDiscussion, MOCK_TEACHER_FOLLOWUP, CLASS_END_EVENT
 } from "./api.js";
@@ -21,7 +21,6 @@ var SPEAKERS = {
 
 export function createStage(ctx) {
 
-  var pane = $("stage-discuss");
   var topicBox = $("discuss-topic");
   var log = $("discuss-log");
   var composer = $("discuss-composer");
@@ -191,7 +190,6 @@ export function createStage(ctx) {
     },
 
     enter: function () {
-      replayEntryAnimation(pane);
       if (!loaded) load();
       if (!posted) setTimeout(function () { input.focus(); }, 300);
     },

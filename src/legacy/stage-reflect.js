@@ -4,7 +4,7 @@
    每张卡提交后展示 AI 点评，三张全部完成才能进入下一阶段
    ═══════════════════════════════════════════════════════════ */
 
-import { $, el, renderInline, replayEntryAnimation } from "./ui.js";
+import { $, el, renderInline } from "./ui.js";
 import { REFLECTION_LENSES, submitReflection, CONTINUE_EVENT } from "./api.js";
 
 /* verdict → 展示文案与配色 */
@@ -16,7 +16,6 @@ var VERDICT = {
 
 export function createStage(ctx) {
 
-  var pane = $("stage-reflect");
   var host = $("lens-list");
   var nextBtn = $("reflect-next");
   var hint = $("reflect-hint");
@@ -182,7 +181,6 @@ export function createStage(ctx) {
     },
 
     enter: function () {
-      replayEntryAnimation(pane);
     },
 
     leave: function () {},

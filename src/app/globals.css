@@ -27,9 +27,6 @@
   --green:           #34c759;
   --orange:          #ff9500;
 
-  /* 阶段过渡遮罩底色 */
-  --veil:            rgba(245, 245, 247, .74);
-
   /* 阴影：轻、散、低透明度 */
   --shadow-rest:     0 1px 2px rgba(0,0,0,.04), 0 6px 18px rgba(0,0,0,.05);
   --shadow-hover:    0 2px 6px rgba(0,0,0,.05), 0 20px 48px rgba(0,0,0,.11);
@@ -69,7 +66,6 @@
   --green:          #30d158;
   --orange:         #ff9f0a;
 
-  --veil:           rgba(0, 0, 0, .70);
 
   --shadow-rest:    0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.5);
   --shadow-hover:   0 2px 6px rgba(0,0,0,.5), 0 20px 48px rgba(0,0,0,.65);
@@ -152,7 +148,6 @@ body::before {
   max-width: 1180px;
   width: 100%;
   margin: 0 auto;
-  animation: rise .7s var(--ease-out);
 }
 
 .hub__header { text-align: center; }
@@ -338,7 +333,6 @@ body::before {
   max-width: 1180px;
   width: 100%;
   margin: 0 auto;
-  animation: rise .5s var(--ease-out);
 }
 
 .view__header {
@@ -441,7 +435,6 @@ body::before {
   flex-direction: column;
   gap: 18px;
   min-height: 0;
-  animation: rise .45s var(--ease-out);
 }
 
 .stage--idle { justify-content: center; }
@@ -986,55 +979,6 @@ body::before {
   transition: opacity .2s var(--ease), transform .25s var(--ease-out);
 }
 .theme-menu__item[aria-checked="true"] .theme-menu__check { opacity: 1; transform: none; }
-
-/* ═══════════ 阶段过渡遮罩 ═══════════════════════════════════ */
-
-/* 基础态就可见 —— 动画只做增强。
-   用 fill-mode:both 的话，动画一旦没推进，元素会永久停在 opacity:0，
-   那就成了「界面消失」而不是「少个过渡」。 */
-.phase-veil {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  opacity: 1;
-
-  background: var(--veil);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  backdrop-filter: blur(30px) saturate(180%);
-}
-
-.phase-veil.is-entering { animation: veilIn .26s var(--ease-out); }
-.phase-veil.is-leaving  { animation: veilOut .22s var(--ease) forwards; }
-
-@keyframes veilIn  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes veilOut { to { opacity: 0; } }
-
-.phase-veil__card {
-  text-align: center;
-  opacity: 1;
-}
-.phase-veil.is-entering .phase-veil__card {
-  animation: veilCard .34s var(--ease-out) .03s;
-}
-@keyframes veilCard {
-  from { opacity: 0; transform: translateY(14px) scale(.94); }
-  to   { opacity: 1; transform: none; }
-}
-
-.phase-veil__title {
-  margin: 0 0 8px;
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -.02em;
-}
-
-.phase-veil__desc {
-  margin: 0;
-  font-size: 15px;
-  color: var(--text-2);
-}
 
 /* ═══════════ 阶段 2：写作区 ═════════════════════════════════ */
 
@@ -1707,14 +1651,6 @@ body::before {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* 视图切换时的淡出 */
-.is-leaving {
-  animation: sink .26s var(--ease) forwards;
-}
-@keyframes sink {
-  to { opacity: 0; transform: scale(.985); }
-}
-
 /* ── 响应式 ──────────────────────────────────────────────── */
 @media (max-width: 780px) {
   .hub       { padding: 44px 22px; gap: 32px; }
@@ -1759,7 +1695,6 @@ body::before {
 
   .done              { padding: 34px 26px 30px; }
   .done__title       { font-size: 25px; }
-  .phase-veil__title { font-size: 25px; }
 
   .theme-switch      { top: 16px; right: 16px; }
   .theme-switch__btn { width: 36px; height: 36px; }

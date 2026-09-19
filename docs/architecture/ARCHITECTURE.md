@@ -28,13 +28,12 @@
 ```mermaid
 graph BT
     subgraph L1["基础层 · 无依赖"]
-        UI["ui.js<br/>元素构造 / 转义 / 动画辅助"]
+        UI["ui.js<br/>元素构造 / 转义 / DOM 辅助"]
         PH["phases.js<br/>阶段词表"]
     end
 
     subgraph L2["能力层"]
         API["api.js<br/>★ 全部后端接口 + mock"]
-        VEIL["veil.js<br/>阶段过渡动效"]
         THEME["theme.js<br/>浅色 / 深色 / 跟随系统"]
     end
 
@@ -95,7 +94,7 @@ sequenceDiagram
     S->>F: 视频播完（ended 自动）<br/>或点「看完了」（手动）
     F->>B: POST /api/chat<br/>"/视频结束"
     B-->>F: hostPhase = "recap_discussion"
-    F->>F: veil.play() 播过渡<br/>setStage("summary")
+    F->>F: setStage("summary") 立即切换
     F-->>S: 写作区
 
     Note over S,B: 阶段 2 → 3
@@ -106,7 +105,7 @@ sequenceDiagram
     S->>F: 点「进入下一阶段」
     F->>B: POST /api/chat "/继续"
     B-->>F: hostPhase = "deep_inquiry"
-    F->>F: veil.play() + setStage("reflect")
+    F->>F: setStage("reflect") 立即切换
 
     Note over S,B: 阶段 3 → 4 → 结束
     S->>F: 答完三张卡 → 点「继续」
@@ -169,14 +168,11 @@ flowchart TD
 
     E --> F{"已经在目标界面了吗？"}
     F -->|是| G["只更新状态文字<br/>（比如正在看视频）"]
-    F -->|否| H{"是从课前进第一幕吗？"}
-
-    H -->|是| I["直接切界面<br/>不播过渡遮罩"]
-    H -->|否| J["播全屏毛玻璃过渡<br/>在遮罩下换内容"]
+    F -->|否| I["直接切换到目标界面<br/>不播放切换动画"]
 
     style Z fill:#f5f5f5,stroke:#999
     style Y fill:#fff0e0,stroke:#e90
-    style J fill:#e6f0ff,stroke:#06c
+    style I fill:#e6f0ff,stroke:#06c
 ```
 
 几个分支都有理由：
@@ -185,7 +181,7 @@ flowchart TD
 | --- | --- |
 | **不认识的值** | 后端将来加新阶段时，旧前端不会崩，只少显示一幕 |
 | **已经在目标界面** | 视频是 `guided_learning` 的内部状态，别把学生正在看的视频打断 |
-| **第一幕不播遮罩** | 那是「开课」不是「切幕」，播遮罩反而奇怪 |
+| **目标发生变化** | 直接更新 Stage 显隐，不等待动画，不阻塞后续响应 |
 
 ---
 
@@ -230,7 +226,7 @@ graph LR
     subgraph FE["前端（显示器）"]
         UI2["界面渲染"]
         ST["状态胶囊"]
-        VL["过渡动效"]
+        VL["即时界面切换"]
     end
 
     subgraph BE["后端（导演）"]
@@ -270,7 +266,7 @@ graph LR
 | 1. 入口 | 两张卡、右上角外观切换（试着切成浅色） |
 | 2. 开始上课 | 状态胶囊变「课程介绍」，AI 返回介绍 |
 | 3. 播放视频 | 拖进度条（证明支持 Range）、播完自动跳下一幕 |
-| 4. 阶段过渡 | 那个全屏毛玻璃切换，是切幕时播的 |
+| 4. 阶段切换 | 展示 `hostPhase` 变化后界面立即更新 |
 | 5. 写作区 → 反馈 | 四色反馈卡 |
 | 6. 三张卡 → 讨论区 → 结束态 | |
 
