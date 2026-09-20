@@ -1,18 +1,17 @@
 /* ═══════════════════════════════════════════════════════════
    AI 学习空间 —— 编排层
-   ├─ 路由：入口 / 课堂 / 课后
+   ├─ 路由：课程 / 周次 / 课时 / 课堂 / 课后
    └─ 界面跟随后端的 host_phase（见 ORCHESTRATOR.md）
 
    前端不决定演到哪一幕。每次拿到后端响应就读 host_phase，
    变了才切界面。所有界面的真值源在后端。
 
-   目前只有一节课，所以不提供选课。将来接多门课时再加「课程列表」
-   这一层，接口契约见 api.js 末尾。
+   可选课程与已开放周次由课程目录返回；未来由后端提供真值。
    ═══════════════════════════════════════════════════════════ */
 
 import { $, visibleRoot, showToast } from "./ui.js";
 
-import { fetchLesson, sendChat, LESSON_ID } from "./api.js";
+import { fetchLesson, fetchStudentCourses, sendChat } from "./api.js";
 import { uiOf, labelOf, isKnown } from "./phases.js";
 import { createThemeSwitch } from "./theme.js";
 import { createStage as createClassStage } from "./stage-class.js";
@@ -30,25 +29,27 @@ import { createStage as createDoneStage } from "./stage-done.js";
 /* sessionId 不能每次刷新都换新的 —— 它是后端 checkpointer 的
    thread_id（ORCHESTRATOR.md §7），换了就等于每次刷新后端都当新会话，
    上一轮的状态接不上。所以持久化。 */
-var SESSION_KEY = "ai-learn.sessionId";
+var SESSION_KEY = "ai-learn.sessionId.";
 
-function loadSessionId() {
+function loadSessionId(lessonId) {
   try {
-    var saved = localStorage.getItem(SESSION_KEY);
+    var saved = localStorage.getItem(SESSION_KEY + lessonId);
     if (saved) return saved;
   } catch (e) { /* 隐私模式下不可用 */ }
 
   var fresh = (window.crypto && crypto.randomUUID)
     ? crypto.randomUUID()
     : "s-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-  try { localStorage.setItem(SESSION_KEY, fresh); } catch (e) { /* 忽略 */ }
+  try { localStorage.setItem(SESSION_KEY + lessonId, fresh); } catch (e) { /* 忽略 */ }
   return fresh;
 }
 
-var sessionId = loadSessionId();
-
-var currentLessonId = LESSON_ID;
+var sessionId = "";
+var currentCourseId = "";
+var currentLessonId = "";
 var lesson = null;
+var courses = null;
+var catalogPromise = null;
 
 /* 后端当前说的那一幕。null 表示还没跟后端对过话 */
 var hostPhase = null;
@@ -59,24 +60,40 @@ var themeSwitch = null;
 /* ═══════════════════════════════════════════════════════════
    路由
 
-   #         → 入口（课堂 / 课后 两个按钮）
-   #/class   → 课堂（4 阶段）
-   #/review  → 课后（内容待定，先留空）
+   #                                → 我的课程
+   #/course/:courseId               → 已开放周次
+   #/lesson/:courseId/:lessonId     → 课堂 / 课后入口
+   #/class/:courseId/:lessonId      → 课堂
+   #/review/:courseId/:lessonId     → 课后
    ═══════════════════════════════════════════════════════════ */
 
 var VIEWS = {
+  courses: "view-courses",
+  weeks: "view-weeks",
+  lesson: "hub",
   class: "view-class",
   review: "view-review"
 };
 
 function parseHash() {
   var raw = location.hash.replace(/^#\/?/, "");
-  if (!raw) return { name: "", id: "" };
-  var parts = raw.split("/");
+  if (!raw) return { name: "", courseId: "", lessonId: "" };
+  var parts;
+  try { parts = raw.split("/").map(decodeURIComponent); }
+  catch (e) { return { name: "invalid", courseId: "", lessonId: "" }; }
   return {
     name: parts[0],
-    id: parts[1] ? decodeURIComponent(parts[1]) : ""
+    courseId: parts[1] || "",
+    lessonId: parts[2] || ""
   };
+}
+
+function courseHash(courseId) { return "#/course/" + encodeURIComponent(courseId); }
+function lessonHash(courseId, lessonId) {
+  return "#/lesson/" + encodeURIComponent(courseId) + "/" + encodeURIComponent(lessonId);
+}
+function partHash(name) {
+  return "#/" + name + "/" + encodeURIComponent(currentCourseId) + "/" + encodeURIComponent(currentLessonId);
 }
 
 function go(hash) {
@@ -103,30 +120,117 @@ function switchView(targetId) {
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
+function loadCourses() {
+  if (!catalogPromise) catalogPromise = fetchStudentCourses().then(function (items) {
+    courses = Array.isArray(items) ? items : [];
+    return courses;
+  }).catch(function (error) {
+    catalogPromise = null;
+    $("course-grid").textContent = "课程加载失败，请刷新页面重试。";
+    showToast("课程加载失败：" + error.message);
+    throw error;
+  });
+  return catalogPromise;
+}
+
+function courseById(id) { return courses && courses.find(function (item) { return item.courseId === id; }); }
+function availableLessons(course) {
+  return course.lessons.filter(function (item) { return item.status === "completed" || item.status === "current"; });
+}
+
+function makeNode(tag, className, content) {
+  var node = document.createElement(tag);
+  if (className) node.className = className;
+  if (content !== undefined) node.textContent = content;
+  return node;
+}
+
+function renderCourses() {
+  var grid = $("course-grid");
+  grid.replaceChildren();
+  if (!courses.length) { grid.textContent = "目前没有已选课程。"; return; }
+  courses.forEach(function (course) {
+    var available = availableLessons(course);
+    var card = makeNode("button", "course-tile");
+    card.type = "button";
+    card.appendChild(makeNode("span", "course-tile__stripe"));
+    var top = makeNode("span", "course-tile__top");
+    top.appendChild(makeNode("span", "course-tile__icon", course.icon || "▤"));
+    top.appendChild(makeNode("span", "course-tile__badge", "已发布"));
+    card.appendChild(top);
+    card.appendChild(makeNode("span", "course-tile__title", course.name));
+    card.appendChild(makeNode("span", "course-tile__desc", course.summary));
+    var stats = makeNode("span", "course-tile__stats");
+    stats.appendChild(makeNode("span", "", course.lessons.length + " 个周次"));
+    stats.appendChild(makeNode("span", "", available.length + " 节可学"));
+    stats.appendChild(makeNode("span", "", "本周第 " + course.currentWeek + " 周"));
+    card.appendChild(stats);
+    card.appendChild(makeNode("span", "course-tile__action", "进入课程  →"));
+    card.addEventListener("click", function () { go(courseHash(course.courseId)); });
+    grid.appendChild(card);
+  });
+}
+
+function renderWeeks(course) {
+  $("weeks-course-name").textContent = course.name;
+  $("weeks-title").textContent = course.name + " · 选择课时";
+  $("weeks-description").textContent = course.summary + " 仅展示已上过和本周要上的课时。";
+  var available = availableLessons(course);
+  $("weeks-summary").textContent = "当前第 " + course.currentWeek + " 周 · 已开放 " + available.length + " / " + course.lessons.length + " 节课";
+  var grid = $("week-grid");
+  grid.replaceChildren();
+  if (!available.length) { grid.textContent = "本课程暂无已开放课时。"; return; }
+  available.forEach(function (item) {
+    var card = makeNode("button", "week-tile" + (item.status === "current" ? " week-tile--current" : ""));
+    card.type = "button";
+    var top = makeNode("span", "week-tile__top");
+    top.appendChild(makeNode("span", "week-tile__number", "第 " + item.week + " 周"));
+    top.appendChild(makeNode("span", "week-tile__status", item.status === "current" ? "本周课程" : "已上过"));
+    card.appendChild(top);
+    card.appendChild(makeNode("span", "week-tile__title", item.title));
+    card.appendChild(makeNode("span", "week-tile__summary", item.summary));
+    card.appendChild(makeNode("span", "week-tile__action", "选择课时  →"));
+    card.addEventListener("click", function () { go(lessonHash(course.courseId, item.lessonId)); });
+    grid.appendChild(card);
+  });
+}
+
+function selectLesson(course, item) {
+  if (currentLessonId !== item.lessonId || currentCourseId !== course.courseId) {
+    currentCourseId = course.courseId;
+    currentLessonId = item.lessonId;
+    sessionId = loadSessionId(item.lessonId);
+    lesson = null;
+    hostPhase = null;
+    resetClassroom();
+  }
+  $("hub-title").textContent = course.name + " · 第 " + item.week + " 周 · " + item.title;
+  $("review-title").textContent = course.name + " · " + item.title + " · 课后";
+  document.querySelector("#view-review .placeholder__text").textContent =
+    "课后内容尚待接入。当前可先体验选课、按周选课时与课堂流程。";
+}
+
 function renderRoute() {
   var route = parseHash();
-
-  /* 外观切换只在入口页显示 */
   if (themeSwitch) themeSwitch.setVisible(!route.name);
-
-  if (!route.name) {
-    showView("hub");
-    return;
-  }
-
-  if (route.name === "class") {
-    openLessonRoute();
-    return;
-  }
-
-  if (route.name === "review") {
-    showView(VIEWS.review);
-    reviewView.enter();
-    return;
-  }
-
-  /* 未知路由 → 回入口 */
-  location.replace("#");
+  loadCourses().then(function () {
+    if (location.hash.replace(/^#$/, "") !== (route.name ? "#/" + [route.name, route.courseId, route.lessonId].filter(Boolean).map(encodeURIComponent).join("/") : "")) return;
+    if (!route.name) { renderCourses(); showView(VIEWS.courses); return; }
+    var course = courseById(route.courseId);
+    if (!course) { location.replace("#"); return; }
+    if (route.name === "course") { renderWeeks(course); showView(VIEWS.weeks); return; }
+    var item = course.lessons.find(function (entry) { return entry.lessonId === route.lessonId; });
+    if (!item || (item.status !== "completed" && item.status !== "current")) {
+      location.replace(courseHash(course.courseId));
+      showToast("该课时尚未开放");
+      return;
+    }
+    selectLesson(course, item);
+    if (route.name === "lesson") { showView(VIEWS.lesson); return; }
+    if (route.name === "class") { openLessonRoute(); return; }
+    if (route.name === "review") { showView(VIEWS.review); reviewView.enter(); return; }
+    location.replace("#");
+  }).catch(function () {});
 }
 
 
@@ -169,8 +273,8 @@ function setStatus(text) {
 
 function ctxFor() {
   return {
-    sessionId: sessionId,
-    lessonId: currentLessonId,
+    get sessionId() { return sessionId; },
+    get lessonId() { return currentLessonId; },
     getLesson: function () { return lesson; },
     getPhase: function () { return hostPhase; },
     /* 后端每轮返回后统一交给这里 —— 「完全跟随」的落点 */
@@ -193,7 +297,8 @@ function ctxFor() {
       });
     },
     toast: showToast,
-    goHome: function () { go(""); }
+    goHome: function () { go(lessonHash(currentCourseId, currentLessonId)); },
+    getReviewHash: function () { return partHash("review"); }
   };
 }
 
@@ -278,13 +383,16 @@ function openLessonRoute() {
   setStage("idle");
   $("btn-start").disabled = true;   /* 课程没到位不让开课 */
 
-  fetchLesson(currentLessonId).then(function (data) {
+  var requestedLessonId = currentLessonId;
+  fetchLesson(requestedLessonId).then(function (data) {
+    if (currentLessonId !== requestedLessonId) return;
     lesson = data;
     classStage.renderLesson(data);
     $("class-title").textContent = data.chapter + " " + data.title;
     $("done-sub").textContent = data.course + " · " + data.chapter + " " + data.title;
     $("btn-start").disabled = false;
   }).catch(function (err) {
+    if (currentLessonId !== requestedLessonId) return;
     $("lesson-eyebrow").textContent = "课程";
     $("lesson-title").textContent = "载入失败";
     $("lesson-summary").textContent = err.message;
@@ -303,13 +411,14 @@ window.addEventListener("hashchange", renderRoute);
 /* 入口的两张卡 */
 document.querySelectorAll("[data-goto]").forEach(function (card) {
   card.addEventListener("click", function () {
-    go(card.dataset.goto === "class" ? "#/class" : "#/review");
+    go(partHash(card.dataset.goto === "class" ? "class" : "review"));
   });
 });
 
-/* 返回一律回入口 —— 层级只有两层，不需要按路由推导 */
 document.querySelectorAll("[data-back]").forEach(function (btn) {
-  btn.addEventListener("click", function () { go(""); });
+  btn.addEventListener("click", function () {
+    go(btn.dataset.back === "courses" ? "#" : lessonHash(currentCourseId, currentLessonId));
+  });
 });
 
 /* Esc 等同于返回，但课堂里不生效 —— 课堂中不允许退出 */
@@ -317,7 +426,7 @@ document.addEventListener("keydown", function (e) {
   if (e.key !== "Escape") return;
   var route = parseHash();
   if (!route.name || route.name === "class") return;
-  go("");
+  go(route.name === "course" ? "#" : route.name === "lesson" ? courseHash(route.courseId) : lessonHash(currentCourseId, currentLessonId));
 });
 
 
@@ -326,6 +435,11 @@ document.addEventListener("keydown", function (e) {
    ═══════════════════════════════════════════════════════════ */
 
 themeSwitch = createThemeSwitch();
+
+var hubBack = makeNode("button", "back", "← 返回课时列表");
+hubBack.type = "button";
+hubBack.addEventListener("click", function () { go(courseHash(currentCourseId)); });
+$("hub").insertBefore(hubBack, $("hub").firstChild);
 
 var ctx = ctxFor();
 

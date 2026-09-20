@@ -60,6 +60,17 @@ export function scrollToEnd(node) {
   node.scrollTop = node.scrollHeight;
 }
 
+export function appendChatMessage(log, role, text) {
+  var row = el("div", "msg msg--" + role);
+  if (role === "ai") row.appendChild(el("span", "msg__avatar", "师"));
+  var bubble = el("div", "msg__bubble");
+  bubble.innerHTML = renderInline(text);
+  row.appendChild(bubble);
+  log.appendChild(row);
+  scrollToEnd(log);
+  return row;
+}
+
 /* ── 轻提示 ──────────────────────────────────────────────── */
 
 export function showToast(text) {

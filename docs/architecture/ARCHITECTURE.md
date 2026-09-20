@@ -97,20 +97,20 @@ sequenceDiagram
     F->>B: POST /api/chat<br/>"/视频结束"
     B-->>F: hostPhase = "recap_discussion"
     F->>F: setStage("summary") 立即切换
-    F-->>S: 写作区
+    F-->>S: 总结复述对话框
 
     Note over S,B: 阶段 2 → 3
     S->>F: 写完总结，提交
     F->>B: POST /api/summary/review
     B-->>F: 结构化反馈
-    F-->>S: 四色反馈卡
+    F-->>S: AI 反馈消息
     S->>F: 点「进入下一阶段」
     F->>B: POST /api/chat "/继续"
     B-->>F: hostPhase = "deep_inquiry"
     F->>F: setStage("reflect") 立即切换
 
     Note over S,B: 阶段 3 → 4 → 结束
-    S->>F: 答完三张卡 → 点「继续」
+    S->>F: 在对话框答完三个视角 → 点「继续」
     F->>B: POST /api/chat "/继续"
     B-->>F: hostPhase = "class_discussion"
     S->>F: 讨论 → 点「结束本节课」
@@ -135,9 +135,9 @@ stateDiagram-v2
 
     课前 --> 对话 : hostPhase = intro
     对话 --> 视频 : 学生点「播放视频」<br/>（前端局部切换，不经后端）
-    视频 --> 写作区 : hostPhase = recap_discussion
-    写作区 --> 三张卡 : hostPhase = deep_inquiry
-    三张卡 --> 讨论区 : hostPhase = class_discussion
+    视频 --> 总结对话 : hostPhase = recap_discussion
+    总结对话 --> 思考对话 : hostPhase = deep_inquiry
+    思考对话 --> 讨论区 : hostPhase = class_discussion
     讨论区 --> 结束态 : hostPhase = ending
     结束态 --> [*]
 
@@ -265,12 +265,13 @@ graph LR
 
 | 步骤 | 展示什么 |
 | --- | --- |
-| 1. 入口 | 两张卡、右上角外观切换（试着切成浅色） |
-| 2. 开始上课 | 状态胶囊变「课程介绍」，AI 返回介绍 |
-| 3. 播放视频 | 拖进度条（证明支持 Range）、播完自动跳下一幕 |
-| 4. 阶段切换 | 展示 `hostPhase` 变化后界面立即更新 |
-| 5. 写作区 → 反馈 | 四色反馈卡 |
-| 6. 三张卡 → 讨论区 → 结束态 | |
+| 1. 选课 | 展示课程卡、进入课程并选择已上过或本周课时，右上角可切换外观 |
+| 2. 课时入口 | 选择课堂或课后；未来周次不可进入 |
+| 3. 开始上课 | 状态胶囊变「课程介绍」，AI 返回介绍 |
+| 4. 播放视频 | 操作系统示例可拖进度条；其他课时显示待接入占位 |
+| 5. 阶段切换 | 展示 `hostPhase` 变化后界面立即更新 |
+| 6. 总结复述 | 在固定对话框中发送总结、查看 AI 反馈消息 |
+| 7. 深入思考 → 讨论区 → 结束态 | 三个视角按顺序在对话框中进行 |
 
 想强调「前端跟随后端」的话，**打开网络面板** —— 每次切幕前都有一个 `/api/chat` 请求，`hostPhase` 就在响应里。
 

@@ -6,6 +6,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 import { delay } from "./ui.js";
+import { buildMockCourses, findMockLesson } from "./course-data.js";
 
 /* 后端就绪后置为 false */
 export var USE_MOCK = true;
@@ -38,17 +39,22 @@ function request(method, url, body) {
                      segments: [{ segmentId, title, order,
                                   startSeconds, endSeconds }] } }
 
-   目前只有一节课，前端不提供选课。将来接多门课时再加「课程列表」
-   这一层；接口契约见文件末尾的注释。
+   课程目录另由 fetchStudentCourses() 提供。课堂数据按 lessonId 获取。
    ═══════════════════════════════════════════════════════════ */
 
 export var LESSON_ID = "ch3-process-scheduling";
+
+/* 学生课程目录由后端按选课及授课进度过滤；不暴露教师端服务密钥。 */
+export function fetchStudentCourses() {
+  if (USE_MOCK) return delay(180).then(function () { return buildMockCourses(); });
+  return request("GET", "/api/student/courses").then(function (r) { return r.courses; });
+}
 
 /* 内容取自 class agent/KNOWLEDGE-BASE.md */
 var MOCK_LESSON = {
   lessonId: LESSON_ID,
   course: "操作系统",
-  chapter: "第 3 章",
+  chapter: "第 3 周",
   title: "处理机调度",
   summary: "CPU 一次只能服务一个进程，系统需要决定多个就绪进程先服务谁。",
   knowledgePointCount: 6,
@@ -73,8 +79,16 @@ var MOCK_LESSON = {
 export function fetchLesson(lessonId) {
   if (USE_MOCK) {
     return delay(320).then(function () {
-      if (lessonId && lessonId !== LESSON_ID) throw new Error("没有这节课：" + lessonId);
-      return MOCK_LESSON;
+      var entry = findMockLesson(lessonId);
+      if (!entry || entry.lesson.status === "upcoming") throw new Error("这节课尚未开放");
+      if (lessonId === LESSON_ID) return MOCK_LESSON;
+      return {
+        ...entry.lesson,
+        course: entry.course.name,
+        knowledgePointCount: entry.lesson.knowledgePoints.length,
+        segmentCount: 1,
+        segments: [{ segmentId: "seg-001", title: entry.lesson.title, order: 1, startSeconds: 0, endSeconds: 0 }]
+      };
     });
   }
   return request("GET", "/api/lesson?lessonId=" + encodeURIComponent(lessonId || LESSON_ID))
@@ -112,7 +126,7 @@ export function sendChat(payload) {
       两者对不上。真后端用 checkpointer 按 session_id 存状态，没这个问题。
    ─────────────────────────────────────────────────────────── */
 
-var mockPhase = "uninitialized";
+var mockPhases = {};
 
 /* 各幕的台词。真后端由模型生成，这里写死只为让界面能跑通 */
 var MOCK_SCRIPT = {
@@ -146,9 +160,21 @@ var MOCK_SCRIPT = {
 
 function mockChat(payload) {
   var text = String((payload && payload.message) || "").trim();
+  var lessonId = payload.lessonId;
+  var mockPhase = mockPhases[lessonId] || "uninitialized";
+  var entry = findMockLesson(lessonId);
+  var topic = entry ? entry.lesson.title : "本节课";
+  var script = lessonId === LESSON_ID ? MOCK_SCRIPT : {
+    intro: "你好！我是这节课的 AI 老师。今天我们一起学习 **" + topic + "**。先了解核心概念，再用自己的话复述，并从不同角度思考。准备好了吗？",
+    guided_learning: "我们开始学习 **" + topic + "**。你可以记录疑问，准备好后继续。",
+    recap_discussion: "现在用自己的话复述 **" + topic + "** 的主要内容和一个应用。",
+    deep_inquiry: "接下来从底层逻辑、实际问题和跨学科关联三个角度想一想。",
+    class_discussion: "现在进入课堂讨论，看看大家对这个主题的看法。",
+    ending: "本节课到这里。课后可以继续回顾本周的内容。"
+  };
 
   function reply(messageText, nextPhase, introComplete) {
-    if (nextPhase) mockPhase = nextPhase;
+    if (nextPhase) mockPhases[lessonId] = mockPhase = nextPhase;
     return {
       ok: true,
       message: { text: messageText, speech: "" },
@@ -165,35 +191,35 @@ function mockChat(payload) {
 
     if (text === VIDEO_END_EVENT) {
       if (mockPhase === "intro" || mockPhase === "guided_learning") {
-        return reply(MOCK_SCRIPT.recap_discussion, "recap_discussion");
+        return reply(script.recap_discussion, "recap_discussion");
       }
       return reply("好。");
     }
 
     if (text === CONTINUE_EVENT) {
       if (mockPhase === "recap_discussion") {
-        return reply(MOCK_SCRIPT.deep_inquiry, "deep_inquiry");
+        return reply(script.deep_inquiry, "deep_inquiry");
       }
       if (mockPhase === "deep_inquiry") {
-        return reply(MOCK_SCRIPT.class_discussion, "class_discussion");
+        return reply(script.class_discussion, "class_discussion");
       }
       return reply("好，我们继续。");
     }
 
     if (text === CLASS_END_EVENT) {
-      return reply(MOCK_SCRIPT.ending, "ending");
+      return reply(script.ending, "ending");
     }
 
     /* ── 以下是按阶段走的普通轮次 ── */
 
     /* 开课 —— uninitialized → intro */
     if (mockPhase === "uninitialized") {
-      return reply(MOCK_SCRIPT.intro, "intro", true);
+      return reply(script.intro, "intro", true);
     }
 
     /* 介绍讲完，进引导学习 */
     if (mockPhase === "intro") {
-      return reply(MOCK_SCRIPT.guided_learning, "guided_learning");
+      return reply(script.guided_learning, "guided_learning");
     }
 
     /* 学生在课上提问 —— 引导学习期间只记下，不展开讲 */
@@ -241,7 +267,7 @@ var MOCK_VIDEO = {
 
 export function fetchLessonVideo(lessonId) {
   if (USE_MOCK) {
-    return delay(320).then(function () { return MOCK_VIDEO; });
+    return delay(320).then(function () { return lessonId === LESSON_ID ? MOCK_VIDEO : null; });
   }
   return request("GET", "/api/lesson/video?lessonId=" + encodeURIComponent(lessonId))
     .then(function (r) { return r.video; });
@@ -286,6 +312,16 @@ export function advancePhase(payload) {
 export function reviewSummary(payload) {
   if (USE_MOCK) {
     return delay(1400).then(function () {
+      if (payload.lessonId !== LESSON_ID) {
+        var entry = findMockLesson(payload.lessonId);
+        var topic = entry ? entry.lesson.title : "本节课";
+        return { ok: true, review: {
+          strengths: ["你尝试用自己的话整理了「" + topic + "」的内容。"],
+          gaps: ["可以补充一个具体例子，说明核心概念如何使用。"],
+          supplements: ["演示反馈仅用于体验流程；正式点评需要接入教师发布的课程内容与后端 AI 服务。"],
+          connections: []
+        } };
+      }
       return {
         ok: true,
         review: {
@@ -346,6 +382,17 @@ export var REFLECTION_LENSES = [
   }
 ];
 
+export function reflectionLensesFor(lessonId) {
+  if (lessonId === LESSON_ID) return REFLECTION_LENSES;
+  var entry = findMockLesson(lessonId);
+  var topic = entry ? entry.lesson.title : "本节课";
+  return [
+    { key: "logic", name: "底层逻辑", question: "「" + topic + "」为什么成立？它依赖哪些前提？", hint: "先说概念，再解释原因。" },
+    { key: "application", name: "实际问题", question: "「" + topic + "」能解决什么实际问题？", hint: "试着举一个身边或专业领域的例子。" },
+    { key: "transfer", name: "跨学科关联", question: "「" + topic + "」与其他知识有什么联系？", hint: "可以从已经学过的课程中寻找相似的思路。" }
+  ];
+}
+
 var MOCK_CRITIQUES = {
   logic: {
     verdict: "good",
@@ -374,6 +421,11 @@ var MOCK_CRITIQUES = {
 export function submitReflection(payload) {
   if (USE_MOCK) {
     return delay(1200).then(function () {
+      if (payload.lessonId !== LESSON_ID) return { ok: true, critique: {
+        verdict: "good",
+        comment: "你已经从这个视角展开了思考。可以再补充一个具体依据，让解释更清楚。演示模式下这里是通用反馈。",
+        followUp: "如果换一个条件或场景，你的结论还成立吗？"
+      } };
       return { ok: true, critique: MOCK_CRITIQUES[payload.lens] || MOCK_CRITIQUES.logic };
     });
   }
@@ -428,7 +480,14 @@ export var MOCK_TEACHER_FOLLOWUP =
 
 export function fetchDiscussion(lessonId) {
   if (USE_MOCK) {
-    return delay(420).then(function () { return MOCK_DISCUSSION; });
+    return delay(420).then(function () {
+      if (lessonId === LESSON_ID) return MOCK_DISCUSSION;
+      var entry = findMockLesson(lessonId);
+      var topic = entry ? entry.lesson.title : "本节课";
+      return { topic: "围绕「" + topic + "」，说说你最想讨论的一个问题。", messages: [
+        { id: "d1", speaker: "host", name: "老师", text: "同学们，今天的主题是「" + topic + "」。谁愿意先分享一个理解或疑问？", at: "14:32" }
+      ] };
+    });
   }
   return request("GET", "/api/discussion?lessonId=" + encodeURIComponent(lessonId))
     .then(function (r) { return { topic: r.topic, messages: r.messages }; });
@@ -458,38 +517,12 @@ export function fetchDiscussionEnd(lessonId) {
     return delay(2600).then(function () {
       return {
         ok: true,
-        closing: "时间到了，今天就到这里。刚才讨论里「公平 vs 效率」这个矛盾，" +
-                 "大家在课后可以继续想 —— 它不只出现在操作系统里。"
+        closing: lessonId === LESSON_ID
+          ? "时间到了，今天就到这里。刚才讨论里「公平 vs 效率」这个矛盾，大家在课后可以继续想。"
+          : "时间到了，今天就到这里。欢迎课后继续整理自己的想法。"
       };
     });
   }
   return request("GET", "/api/discussion/end?lessonId=" + encodeURIComponent(lessonId))
     .then(function (r) { return r.closing; });
 }
-
-
-/* ═══════════════════════════════════════════════════════════
-   将来接多门课时要补的接口 —— 现在不实现，先记着契约
-
-   GET /api/courses
-   → { ok, courses: [{
-         courseId, name, summary,
-         lessonCount, completedLessonCount,
-         status: 'not_started' | 'in_progress' | 'completed',
-         currentLessonId, currentLessonTitle,     // 当前要上的那一节
-         progress: { completedPhases, masteryAvg, lastActiveAt }
-       }] }
-
-   GET /api/courses/<courseId>
-   → { ok, course: { ...同上... } }
-
-   GET /api/courses/<courseId>/lessons
-   → { ok, lessons: [{
-         lessonId, chapter, title, summary,
-         knowledgePointCount, segmentCount, estimatedMinutes,
-         status, progress: { currentStage, completedPhases, masteryAvg }
-       }] }
-
-   加上这三个之后，初始界面就可以从「课堂 / 课后 两个按钮」
-   扩成「选课程 → 课堂 / 课后」的两级结构。
-   ═══════════════════════════════════════════════════════════ */

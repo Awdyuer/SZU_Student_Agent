@@ -1,210 +1,117 @@
-/* ═══════════════════════════════════════════════════════════
-   阶段 2「总结复述」
-   写作区 → 提交 → AI 结构化反馈（讲对的 / 遗漏的 / 补充 / 关联）
-   ═══════════════════════════════════════════════════════════ */
-
-import { $, el, renderInline } from "./ui.js";
+/* 总结复述：在对话框中提交总结、阅读反馈和决定下一步。 */
+import { $, appendChatMessage } from "./ui.js";
 import { reviewSummary, CONTINUE_EVENT } from "./api.js";
 
-/* 引导问题：点一下插入到文本框，给写不出来的学生一个抓手。
-   内容对应 KNOWLEDGE-BASE.md 里各知识点的「检测问题」 */
-var PROMPTS = [
-  "调度要解决什么问题？",
-  "三级调度分别管什么？",
-  "评价调度好坏看哪些指标？",
-  "FCFS 和 SJF 差在哪？",
-  "抢占式和非抢占式怎么区分？"
-];
+function introFor(lesson) {
+  return "现在请用你自己的话讲一遍刚才学到的「" + (lesson ? lesson.title : "本节课") + "」。不用翻资料，想到多少说多少。\n可以说说核心概念、解决的问题和一个具体例子。";
+}
 
-var MAX_LEN = 600;
+function formatReview(review) {
+  var lines = ["我看完你的总结了，下面是反馈："];
+  [
+    ["你讲对的", review.strengths],
+    ["还可以补上的", review.gaps],
+    ["补充说明", review.supplements]
+  ].forEach(function (group) {
+    if (group[1] && group[1].length) {
+      lines.push("\n" + group[0] + "：");
+      group[1].forEach(function (item) { lines.push("• " + item); });
+    }
+  });
+  if (review.connections && review.connections.length) {
+    lines.push("\n和以前内容的关联：");
+    review.connections.forEach(function (item) { lines.push("• " + item.lesson + "：" + item.note); });
+  }
+  lines.push("\n你可以再改一版，或者进入下一阶段。");
+  return lines.join("\n");
+}
 
 export function createStage(ctx) {
-
-  var writeView = $("summary-write");
-  var reviewView = $("summary-review");
-  var prompts = $("summary-prompts");
+  var log = $("summary-log");
+  var form = $("summary-composer");
   var input = $("summary-input");
   var count = $("summary-count");
   var submitBtn = $("summary-submit");
+  var actions = $("summary-actions");
   var nextBtn = $("summary-next");
-
-  var submitted = false;   /* 本次进入是否已提交过 */
-
-  /* ── 引导问题 chips ──────────────────────────────────── */
-
-  function buildPrompts() {
-    prompts.innerHTML = "";
-    PROMPTS.forEach(function (text) {
-      var chip = el("button", "prompt-chip", text);
-      chip.type = "button";
-      chip.addEventListener("click", function () { insertPrompt(text); });
-      prompts.appendChild(chip);
-    });
-  }
-
-  /* 插入到光标处；没有光标就追加到末尾 */
-  function insertPrompt(text) {
-    if (input.disabled) return;
-
-    var start = input.selectionStart;
-    var end = input.selectionEnd;
-    var value = input.value;
-
-    if (start == null || (start === 0 && end === 0 && value === "")) {
-      input.value = text + "：\n";
-    } else {
-      var before = value.slice(0, start);
-      var after = value.slice(end);
-      var glue = before && !/\n$/.test(before) ? "\n" : "";
-      input.value = before + glue + text + "：\n" + after;
-    }
-
-    input.focus();
-    updateCount();
-  }
+  var submitted = false;
+  var busy = false;
 
   function updateCount() {
-    var len = input.value.length;
-    count.textContent = len + " / " + MAX_LEN;
-    count.classList.toggle("is-near", len > MAX_LEN * 0.85);
-    submitBtn.disabled = len < 10;
+    count.textContent = input.value.length + " / 600";
+    count.classList.toggle("is-near", input.value.length > 510);
+    submitBtn.disabled = busy || input.value.trim().length < 10;
   }
-
-  /* ── 提交 ────────────────────────────────────────────── */
 
   function submit() {
     var text = input.value.trim();
-    if (text.length < 10) return;
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = "AI 正在看…";
-
-    reviewSummary({
-      sessionId: ctx.sessionId,
-      lessonId: ctx.lessonId,
-      segmentId: "seg-001",
-      text: text
-    }).then(function (res) {
-      submitted = true;
-      renderReview(res.review);
-      writeView.hidden = true;
-      reviewView.hidden = false;
-    }).catch(function (err) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "提交给 AI 看";
-      ctx.toast("提交失败：" + err.message);
-    });
+    if (busy || text.length < 10) return;
+    busy = true;
+    input.disabled = true;
+    var message = appendChatMessage(log, "me", text);
+    input.value = "";
+    updateCount();
+    reviewSummary({ sessionId: ctx.sessionId, lessonId: ctx.lessonId, segmentId: "seg-001", text: text })
+      .then(function (res) {
+        submitted = true;
+        appendChatMessage(log, "ai", formatReview(res.review));
+        actions.hidden = false;
+        form.hidden = true;
+      }).catch(function (err) {
+        message.remove();
+        input.value = text;
+        ctx.toast("提交失败：" + err.message);
+      }).finally(function () {
+        busy = false;
+        input.disabled = false;
+        updateCount();
+      });
   }
-
-  /* ── 反馈渲染 ────────────────────────────────────────── */
-
-  function renderGroup(kind, label, items) {
-    if (!items || !items.length) return null;
-
-    var box = el("div", "fb fb--" + kind);
-    box.appendChild(el("p", "fb__label", label));
-
-    var list = el("ul", "fb__list");
-    items.forEach(function (text) {
-      /* 后端可能返回含 **粗体** 的文本，统一走 renderInline */
-      var li = el("li");
-      li.innerHTML = renderInline(text);
-      list.appendChild(li);
-    });
-    box.appendChild(list);
-
-    return box;
-  }
-
-  function renderConnections(items) {
-    if (!items || !items.length) return null;
-
-    var box = el("div", "fb fb--link");
-    box.appendChild(el("p", "fb__label", "和以前内容的关联"));
-
-    var list = el("ul", "fb__list");
-    items.forEach(function (item) {
-      var li = el("li");
-      li.appendChild(el("span", "fb__lesson", item.lesson));
-      var note = el("span");
-      note.innerHTML = renderInline(item.note);
-      li.appendChild(note);
-      list.appendChild(li);
-    });
-    box.appendChild(list);
-
-    return box;
-  }
-
-  function renderReview(review) {
-    var body = $("summary-review-body");
-    body.innerHTML = "";
-
-    [
-      renderGroup("good", "你讲对的", review.strengths),
-      renderGroup("gap", "遗漏的", review.gaps),
-      renderGroup("add", "补充", review.supplements),
-      renderConnections(review.connections)
-    ].forEach(function (node) {
-      if (node) body.appendChild(node);
-    });
-  }
-
-  /* 回到写作态（重新写一版） */
-  function backToWrite() {
-    reviewView.hidden = true;
-    writeView.hidden = false;
-    submitBtn.disabled = false;
-    submitBtn.textContent = "重新提交";
-  }
-
-  /* ── 对外接口 ────────────────────────────────────────── */
 
   return {
     mount: function () {
-      buildPrompts();
-
-      input.maxLength = MAX_LEN;
+      input.maxLength = 600;
+      appendChatMessage(log, "ai", introFor(ctx.getLesson()));
       input.addEventListener("input", updateCount);
-      submitBtn.addEventListener("click", submit);
-
-      $("summary-revise").addEventListener("click", backToWrite);
-      /* 保留手动推进，但推不推由后端判定 —— 前端只发请求 */
+      input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+      });
+      form.addEventListener("submit", function (event) { event.preventDefault(); submit(); });
+      $("summary-revise").addEventListener("click", function () {
+        submitted = false;
+        actions.hidden = true;
+        form.hidden = false;
+        appendChatMessage(log, "ai", "好的，再讲一版吧。我会重新看你的总结。");
+        input.focus();
+      });
       nextBtn.addEventListener("click", function () {
         nextBtn.disabled = true;
-        ctx.sendControl(CONTINUE_EVENT).catch(function (err) {
+        var previousPhase = ctx.getPhase();
+        ctx.sendControl(CONTINUE_EVENT).then(function () {
+          if (ctx.getPhase() === previousPhase) nextBtn.disabled = false;
+        }).catch(function (err) {
           nextBtn.disabled = false;
           ctx.toast("发送失败：" + err.message);
         });
       });
-
       updateCount();
     },
-
     enter: function () {
-
-      /* 已提交过就停在反馈，否则回到写作态 */
-      if (submitted) {
-        writeView.hidden = true;
-        reviewView.hidden = false;
-      } else {
-        writeView.hidden = false;
-        reviewView.hidden = true;
-        setTimeout(function () { input.focus(); }, 260);
-      }
+      actions.hidden = !submitted;
+      form.hidden = submitted;
+      if (!submitted) input.focus();
     },
-
     leave: function () {},
-
-    /* 换课：清空写的总结与已有反馈 */
     reset: function () {
+      log.innerHTML = "";
+      appendChatMessage(log, "ai", introFor(ctx.getLesson()));
       input.value = "";
+      input.disabled = false;
       submitted = false;
-      submitBtn.disabled = false;
-      submitBtn.textContent = "提交给 AI 看";
-      $("summary-review-body").innerHTML = "";
-      writeView.hidden = false;
-      reviewView.hidden = true;
+      busy = false;
+      nextBtn.disabled = false;
+      actions.hidden = true;
+      form.hidden = false;
       updateCount();
     }
   };

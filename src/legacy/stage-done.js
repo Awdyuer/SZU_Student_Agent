@@ -29,7 +29,7 @@ export function createStage(ctx) {
     mount: function () {
       $("done-to-review").addEventListener("click", function () {
         /* 去「课后」（内容待定，现在是占位） */
-        location.hash = "#/review";
+        location.hash = ctx.getReviewHash();
       });
     },
 

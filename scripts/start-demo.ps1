@@ -16,6 +16,20 @@ function Test-LocalPort([int]$port) {
     }
 }
 
+function Get-ExistingDemoUrl {
+    foreach ($candidatePort in 3000..3010) {
+        if (-not (Test-LocalPort $candidatePort)) { continue }
+        $candidateUrl = "http://127.0.0.1:$candidatePort"
+        try {
+            $response = Invoke-WebRequest -Uri $candidateUrl -UseBasicParsing -TimeoutSec 3
+            if ($response.StatusCode -eq 200 -and $response.Content -match 'AI 学习空间 · 学生端') {
+                return $candidateUrl
+            }
+        } catch { }
+    }
+    return $null
+}
+
 try {
     $node = Get-Command node -ErrorAction Stop
     $npm = Get-Command npm.cmd -ErrorAction Stop
@@ -36,6 +50,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'node_modules/next/pack
     if ($LASTEXITCODE -ne 0) { throw '依赖安装失败，请检查网络连接和 npm 配置。' }
 }
 
+$existingUrl = Get-ExistingDemoUrl
+if ($existingUrl) {
+    Write-Host "检测到已运行的演示服务：$existingUrl" -ForegroundColor Green
+    Start-Process $existingUrl
+    exit 0
+}
+
 $port = 3000..3010 | Where-Object { -not (Test-LocalPort $_) } | Select-Object -First 1
 if ($null -eq $port) { throw '3000–3010 端口均被占用，请关闭占用端口的程序后重试。' }
 
@@ -47,8 +68,9 @@ $server = $null
 try {
     $server = Start-Process -FilePath $node.Source -ArgumentList @($nextCli, 'dev', '--hostname', '127.0.0.1', '--port', [string]$port) -PassThru -NoNewWindow
     $ready = $false
-    for ($attempt = 0; $attempt -lt 90; $attempt++) {
-        Start-Sleep -Seconds 1
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while ($timer.Elapsed.TotalSeconds -lt 90) {
+        Start-Sleep -Milliseconds 250
         if ($server.HasExited) { throw '前端服务意外退出，请查看上方错误信息。' }
         try {
             $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2

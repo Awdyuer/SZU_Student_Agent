@@ -1,8 +1,6 @@
 # Next.js 学生端前端流程图
 
-本文是当前代码对应的流程图源文件，使用 Mermaid 编写；不依赖已删除的旧 SVG/HTML 导出。可在支持 Mermaid 的 Markdown 查看器中直接预览。
-
-> 现状：Next.js App Router 只有 `/` 一个文件路由；入口、课堂和课后由浏览器 Hash 路由控制。课堂内的阶段由后端响应中的 `hostPhase` 决定，当前 `src/legacy/api.js` 默认使用 Mock。界面切换即时完成，不播放页面或阶段过渡动画。
+> 现状：Next.js App Router 只有 `/` 一个文件路由；课程、周次、课时、课堂和课后由浏览器 Hash 路由控制。课堂内的阶段由后端响应中的 `hostPhase` 决定，当前 `src/legacy/api.js` 默认使用 Mock。
 
 ## 1. 启动、渲染与客户端初始化
 
@@ -12,51 +10,47 @@ flowchart TD
     B --> C[主题首屏脚本读取本地偏好]
     B --> D[加载 globals.css]
     B --> E[page.js 渲染 StudentApp]
-    E --> F[服务端输出入口、课堂、课后的初始 HTML]
+    E --> F[服务端输出课程目录、周次、课时入口、课堂、课后的初始 HTML]
     F --> G[浏览器显示页面并完成 React hydration]
     G --> H[StudentApp 的 useEffect 动态导入 legacy/app.js]
-    H --> I[读取或生成 sessionId 并保存到 localStorage]
-    I --> J[创建主题控制器和各阶段模块]
+    H --> I[创建主题控制器和各阶段模块]
+    I --> J[按课时读取或生成 sessionId 并保存到 localStorage]
     J --> K[每个唯一模块 mount 一次，绑定事件]
     K --> L[注册 hashchange 并执行 renderRoute]
-    L --> M[根据当前 Hash 显示入口、课堂或课后]
+    L --> M[获取课程目录并验证 Hash 路由]
+    M --> N[显示课程、周次、课时入口、课堂或课后]
 ```
 
 `src/app/layout.js` 负责布局、元数据、主题首屏脚本和全局 CSS；`src/app/page.js` 渲染 `StudentApp`。`StudentApp` 是 Client Component，保留现有页面结构，并在挂载后导入 `src/legacy/app.js`。初始 HTML 不等于课堂业务已加载；业务事件绑定发生在动态导入之后。
 
-## 2. 路由与页面切换
+## 2. 选课程、选周次与路由守卫
 
 ```mermaid
-flowchart LR
-    ROOT[Next.js 文件路由 /] --> APP[StudentApp]
-    APP --> HASH{parseHash}
-    HASH -->|空 Hash 或 #| HUB[hub：课堂/课后入口]
-    HASH -->|#/class| CLASS[view-class：课堂]
-    HASH -->|#/review| REVIEW[view-review：课后占位页]
-    HASH -->|其他值| UNKNOWN[location.replace 到 #]
-    UNKNOWN --> HUB
-    HUB -->|点击课堂卡片| CLASS
-    HUB -->|点击课后卡片| REVIEW
-    REVIEW -->|返回按钮或 Esc| HUB
-    CLASS -->|浏览器后退| HASH
+flowchart TD
+    A[访问 / 或 #] --> B[GET /api/student/courses]
+    B --> C[只显示学生已选课程]
+    C --> D[点击课程卡]
+    D --> E[进入 #/course/:courseId]
+    E --> F[筛选 completed 与 current 的课时]
+    F --> G[显示已上过周次与本周课时]
+    G --> H[点击某周课时]
+    H --> I[进入 #/lesson/:courseId/:lessonId]
+    I --> J[按 lessonId 建立独立 sessionId]
+    J --> K{学生选择}
+    K -->|课堂| L[进入 #/class/:courseId/:lessonId]
+    K -->|课后| M[进入 #/review/:courseId/:lessonId]
+    N[直接输入深链接] --> O{课程与课时存在且 status 可学?}
+    O -->|否| P[返回课程目录或该课程周次页]
+    O -->|是| I
 ```
 
-| 地址或状态 | 控制者 | 结果 |
-| --- | --- | --- |
-| `/` | Next.js App Router | 加载学生端应用 |
-| `#` 或空 Hash | `renderRoute()` | 显示入口和主题切换器 |
-| `#/class` | `openLessonRoute()` | 显示课堂；首次进入时加载课时 |
-| `#/review` | `renderRoute()` | 显示课后占位页 |
-| 其他 Hash | `renderRoute()` | 回到入口 |
-| `currentStage` | `setStage()` | 控制课堂内部的 `idle/chat/video/summary/reflect/discuss/done` |
-
-Hash 切换直接修改显隐、焦点与滚动位置，不等待退场或入场动画。课堂没有页面内返回按钮，Esc 在课堂中不触发返回；浏览器自身的后退仍可改变 Hash。
+演示模式展示高等数学、线性代数、通信原理、操作系统各 16 周；以 2026-09-01 为学期起点推算当前周，之前周次假定已上过。正式接入时，`status` 应取自后端真实授课与发布状态，前端过滤与深链接守卫只是用户体验保护，后端仍须做权限校验。
 
 ## 3. 进入课堂与四阶段教学流程
 
 ```mermaid
 flowchart TD
-    A[进入 #/class] --> B{课时 lesson 已缓存?}
+    A[进入 #/class/:courseId/:lessonId] --> B{课时 lesson 已缓存?}
     B -->|否| C[显示 idle，禁用开始按钮]
     C --> D[fetchLesson 获取课程信息]
     D -->|成功| E[填充课时卡片并启用开始按钮]
@@ -72,15 +66,15 @@ flowchart TD
     N -->|自然播放完| O[发送 /视频结束]
     N -->|手动点击看完了| O
     O --> P[hostPhase = recap_discussion]
-    P --> Q[summary：填写总结]
-    Q --> R[reviewSummary 返回结构化反馈]
+    P --> Q[summary：在对话框中发送总结]
+    Q --> R[reviewSummary 返回结构化反馈消息]
     R --> S{学生选择}
     S -->|我再改一版| Q
     S -->|进入下一阶段| T[发送 /继续]
     T --> U[hostPhase = deep_inquiry]
-    U --> V[reflect：逐张完成思考卡]
-    V --> W[submitReflection 返回点评]
-    W --> X{三张卡完成?}
+    U --> V[reflect：在对话框中依次回答三个视角]
+    V --> W[submitReflection 返回点评消息]
+    W --> X{三个视角完成?}
     X -->|否| V
     X -->|是| Y[发送 /继续]
     Y --> Z[hostPhase = class_discussion]
@@ -89,7 +83,7 @@ flowchart TD
     AB --> AC[点击结束本节课，发送 /下课]
     AC --> AD[hostPhase = ending]
     AD --> AE[done：结束态和知识点清单]
-    AE --> AF[点击去看看掌握情况，进入 #/review]
+    AE --> AF[点击去看看掌握情况，进入当前课时的 #/review/:courseId/:lessonId]
 ```
 
 图中 `hostPhase` 表示服务端响应的权威状态；默认 Mock 会模拟同样的字段。真实后端是否推进阶段由后端决定，前端的“继续”按钮只发控制消息。`chat → video` 是 `guided_learning` 内的前端局部切换，点击播放时不发送阶段推进请求；视频结束后才通知后端。
@@ -124,30 +118,13 @@ flowchart TD
     N --> O[调用目标 owner.enter]
 ```
 
-这里的 `applyServerTurn()` 只处理阶段变化。总结反馈、反思点评、讨论消息等各阶段的业务内容由对应模块分别渲染。页面和 Stage 切换均为即时显隐，消息、Toast、悬停等局部反馈动画仍保留。
+这里的 `applyServerTurn()` 只处理阶段变化。总结反馈、反思点评、讨论消息等各阶段的业务内容由对应模块分别渲染。页面和 Stage 切换均为即时显隐；课堂聊天、总结复述、深入思考与课堂讨论使用固定尺寸的对话面板，消息在面板内滚动。消息、Toast、悬停等局部反馈动画仍保留。
 
 ## 5. API 与错误路径
 
-```mermaid
-flowchart TD
-    A[课堂模块调用 src/legacy/api.js] --> B{USE_MOCK?}
-    B -->|true，默认| C[本地 Mock + 模拟延时]
-    B -->|false| D[读取 NEXT_PUBLIC_API_BASE_URL]
-    D --> E[拼接 /api 路径并发起 fetch]
-    E --> F{HTTP 响应成功?}
-    F -->|否| G[抛出 HTTP 错误]
-    F -->|是| H[解析 JSON]
-    C --> I[返回业务结果]
-    H --> I
-    I --> J[阶段模块更新内容]
-    I --> K{返回 hostPhase?}
-    K -->|是| L[交给 applyServerTurn]
-    K -->|否| M[保持当前课堂阶段]
-    G --> N[调用方显示错误或允许重试]
-```
-
 | 请求 | 触发点 | 用途 |
 | --- | --- | --- |
+| `GET /api/student/courses` | 首次打开课程目录 | 学生已选课程、可学周次及授课状态 |
 | `GET /api/lesson` | 首次进入课堂 | 课时信息 |
 | `POST /api/chat` | 开课、提问、视频结束、继续、下课 | AI 回复与 `hostPhase` |
 | `GET /api/lesson/video` | 点击播放视频 | 视频地址和元数据 |

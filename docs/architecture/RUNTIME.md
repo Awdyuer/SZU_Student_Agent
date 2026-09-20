@@ -12,40 +12,42 @@
 2. **根布局中的内联脚本先跑** → 读 `localStorage` 或系统偏好，定下 `data-theme`（在样式表之前，避免深色系统下闪一帧白）
 3. **加载 `src/app/globals.css`** → 主题已定，不会渲染错配色
 4. **React hydration** → `StudentApp` 变为可交互的 Client Component
-5. **动态加载 `src/legacy/app.js`** → 建 8 个模块实例 → 各模块 `mount()` 绑自己的事件 → 按 hash 显示入口页
+5. **动态加载 `src/legacy/app.js`** → 建立课堂模块实例 → 各模块 `mount()` 绑自己的事件 → 获取学生课程目录并按 hash 显示页面
 
 > 第 5 步之前不绑任何事件。`idle`/`chat`/`video` 指向**同一个实例**（同属「引导学习」那一幕）。
 
 ---
 
-## B · 入口页
+## B · 课程与周次选择
 
-6. **显示两张卡**（课堂 / 课后）—— 这一步没有任何后端请求
-7. **（可选）切主题** → 改根节点属性 → 所有 CSS 变量重算 → 全页配色变（没有一行 JS 逐个改元素）
+6. **显示学生课程卡** → 演示模式读取本地课程目录；真实模式请求 `GET /api/student/courses`
+7. **选择课程和周次** → 只显示 `completed` 与 `current` 课时；未开放课时的深链接会被拦回周次页
+8. **选择课时** → 进入课堂 / 课后双入口，并为该课时读取或生成独立 `sessionId`
+9. **（可选）切主题** → 改根节点属性 → 所有 CSS 变量重算 → 全页配色变（没有一行 JS 逐个改元素）
 
 ---
 
 ## C · 进课堂
 
-8. **点「课堂」卡片** → 只改 hash → 触发 `hashchange` → 路由
+10. **点所选课时的「课堂」卡片** → 只改 hash → 触发 `hashchange` → 路由
    （不直接调函数，是为了让浏览器前进/后退键也能用，且只有一条代码路径）
-9. **视图切换 + 拉课时** → 入口页淡出 320ms、课堂视图淡入；同时 `GET /api/lesson` 填课前卡
+11. **视图切换 + 拉课时** → 即时切换课堂视图；同时 `GET /api/lesson` 填课前卡
 
 ---
 
 ## D · 一节课的 6 幕
 
-10. **点「开始上课」** → **先本地切到对话界面**（不等网络）→ 同时发 `POST /api/chat` `/上课开始`
+12. **点「开始上课」** → **先本地切到对话界面**（不等网络）→ 同时发 `POST /api/chat` `/上课开始`
 11. **后端返回** `hostPhase: "intro"` → AI 介绍出现 + 「开始播放教学视频」按钮
     → `applyServerTurn` 发现"已经在目标界面了"，界面不变（这是刻意的，让网络延迟不影响体感）
 12. **点「开始播放教学视频」** → 本地切到视频界面，**不发请求**
 13. **视频加载** → `GET /api/lesson/video` 拿地址 → `GET *.mp4`（浏览器会发多个 Range 请求）
 14. **视频播完**（`ended` 事件，或点「看完了」）→ `POST /api/chat` `/视频结束`
-15. **后端返回** `hostPhase: "recap_discussion"` → 立即切到写作区
-16. **提交总结** → `POST /api/summary/review` → 四色反馈卡（空数组的块自动跳过）
+15. **后端返回** `hostPhase: "recap_discussion"` → 立即切到总结复述对话框
+16. **提交总结** → `POST /api/summary/review` → 在对话消息中展示结构化反馈（空数组的组自动跳过）
 17. **点「进入下一阶段」** → `POST /api/chat` `/继续`（**推不推由后端判定**）
-18. **后端返回** `hostPhase: "deep_inquiry"` → 立即切到三张卡
-19. **答三张卡** → 每张 `POST /api/reflection` → 卡内出现 AI 点评，收起输入区
+18. **后端返回** `hostPhase: "deep_inquiry"` → 立即切到深入思考对话框
+19. **回答三个视角** → 每轮 `POST /api/reflection` → AI 点评和下一题依次进入消息流
 20. **点「进入课堂讨论」** → `POST /api/chat` `/继续` → `class_discussion` → 立即切到讨论区
 21. **讨论区加载** → `GET /api/discussion` → 讨论题 + 发言**逐条间隔 520ms 出现**
 22. **发言** → `POST /api/discussion` → 自己的发言追加，老师追问随后出现
@@ -55,7 +57,7 @@
 
 ## E · 结束
 
-24. **点「去看看掌握情况」** → 跳课后（占位）
+26. **点「去看看掌握情况」** → 跳到当前课时的课后页面（内容占位）
 
 ---
 
@@ -87,9 +89,9 @@
 | 播放视频 | `GET /api/lesson/video` | 视频地址 |
 | 视频加载 | `GET *.mp4`（Range） | 视频数据 |
 | 视频结束 | `POST /api/chat` `/视频结束` | `recap_discussion` |
-| 提交总结 | `POST /api/summary/review` | 四块反馈 |
+| 提交总结 | `POST /api/summary/review` | 对话中的结构化反馈 |
 | 进入下一阶段 | `POST /api/chat` `/继续` | `deep_inquiry` |
-| 答三张卡 | `POST /api/reflection` × 3 | AI 点评 |
+| 回答三个视角 | `POST /api/reflection` × 3 | 对话中的 AI 点评 |
 | 进入讨论 | `POST /api/chat` `/继续` | `class_discussion` |
 | 进讨论区 | `GET /api/discussion` | 讨论题 + 发言 |
 | 发言 | `POST /api/discussion` | 自己的发言 |

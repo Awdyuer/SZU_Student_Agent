@@ -9,7 +9,7 @@
 
 import { $, el, delay, scrollToEnd, reduceMotion } from "./ui.js";
 import {
-  fetchDiscussion, postDiscussion, MOCK_TEACHER_FOLLOWUP, CLASS_END_EVENT
+  fetchDiscussion, postDiscussion, MOCK_TEACHER_FOLLOWUP, LESSON_ID, CLASS_END_EVENT
 } from "./api.js";
 
 /* 说话人 → 头像与配色 */
@@ -121,7 +121,7 @@ export function createStage(ctx) {
           id: "host-follow",
           speaker: "host",
           name: "老师",
-          text: MOCK_TEACHER_FOLLOWUP,
+          text: ctx.lessonId === LESSON_ID ? MOCK_TEACHER_FOLLOWUP : "这个角度很有启发。你能再举一个具体例子，说明自己的理由吗？",
           at: new Date().toTimeString().slice(0, 5)
         });
         endBtn.hidden = false;
