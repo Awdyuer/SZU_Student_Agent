@@ -7,11 +7,12 @@
    由后端决定下一幕是什么。
    ═══════════════════════════════════════════════════════════ */
 
-import { $, el, icon, delay, renderInline, scrollToEnd } from "./ui.js";
+import { $, el, icon, renderInline, scrollToEnd } from "./ui.js";
 import {
   sendChat, fetchLessonVideo,
   CLASS_START_EVENT, VIDEO_END_EVENT
 } from "./api.js";
+import { mountVideoPlayer } from "./video-player.js";
 
 export function createStage(ctx) {
 
@@ -168,13 +169,19 @@ export function createStage(ctx) {
      看视频不是「一轮对话」，所以发一条约定的控制消息，由后端的
      classify_turn 去识别。前端不自己决定下一步。 */
   var videoEndNotified = false;
+  var playerHandle = null;
+
+  function destroyPlayer() {
+    if (playerHandle) playerHandle.destroy();
+    playerHandle = null;
+  }
 
   function notifyVideoEnd(how) {
     if (videoEndNotified) return;
     videoEndNotified = true;
 
-    var bar = $("video-sub");
-    bar.textContent = how === "ended"
+    var status = $("video-player-status");
+    status.textContent = how === "ended"
       ? "视频已播完，正在通知老师…"
       : "已通知老师，等待下一步…";
 
@@ -187,7 +194,7 @@ export function createStage(ctx) {
       if (res && res.message && res.message.text) appendMessage("ai", res.message.text);
       ctx.applyServerTurn(res);
     }).catch(function (err) {
-      bar.textContent = "通知失败：" + err.message;
+      status.textContent = "通知失败：" + err.message;
       ctx.toast("通知失败：" + err.message);
       videoEndNotified = false;   /* 允许重试 */
     });
@@ -199,78 +206,30 @@ export function createStage(ctx) {
 
     videoEndNotified = false;     /* 重进视频页时重置 */
 
-    var frame = $("video-frame");
-    frame.innerHTML = "";
-    $("video-title").textContent = "教学视频";
-    $("video-sub").textContent = "正在获取…";
+    var slot = $("video-player-slot");
+    destroyPlayer();
+    $("video-player-status").textContent = "正在准备播放器…";
 
     fetchLessonVideo(ctx.lessonId).then(function (data) {
-      if (data && data.url) mountVideo(frame, data);
-      else mountVideoEmpty(frame);
+      var lesson = ctx.getLesson();
+      var first = lesson && lesson.segments && lesson.segments[0];
+      playerHandle = mountVideoPlayer(slot, {
+        lessonId: ctx.lessonId,
+        video: data || null,
+        startSeconds: first && typeof first.startSeconds === "number" ? first.startSeconds : 0,
+        onEnded: function () { notifyVideoEnd("ended"); },
+        onError: function (error) {
+          var message = error && error.message ? error.message : String(error || "未知错误");
+          $("video-player-status").textContent = "播放器错误：" + message;
+          ctx.toast("播放器错误：" + message);
+        }
+      });
+      $("video-player-status").textContent = playerHandle.mounted
+        ? "播放器已接入"
+        : "等待接入外部视频播放器";
     }).catch(function (err) {
-      mountVideoEmpty(frame, err.message);
+      $("video-player-status").textContent = "视频信息获取失败：" + err.message;
     });
-  }
-
-  function mountVideo(frame, data) {
-    var node = document.createElement("video");
-    node.controls = true;
-    node.playsInline = true;
-    node.preload = "metadata";
-    node.src = data.url;
-    if (data.poster) node.poster = data.poster;
-
-    /* 从第一个片段的位置播起 —— 片段是整条视频上的时间段 */
-    var lesson = ctx.getLesson();
-    var first = lesson && lesson.segments && lesson.segments[0];
-    if (first && typeof first.startSeconds === "number"
-        && first.startSeconds < (data.duration || Infinity)) {
-      node.addEventListener("loadedmetadata", function () {
-        node.currentTime = first.startSeconds;
-      }, { once: true });
-    }
-
-    /* 自然播完 → 自动通知后端 */
-    node.addEventListener("ended", function () { notifyVideoEnd("ended"); });
-
-    frame.appendChild(node);
-    $("video-title").textContent = data.title || "教学视频";
-    $("video-sub").textContent =
-      "来源 " + (data.source || "openmaic") +
-      (data.duration ? " · 全长 " + formatDuration(data.duration) : "");
-  }
-
-  function mountVideoEmpty(frame, errorText) {
-    var box = el("div", "video__empty");
-    box.innerHTML =
-      '<span class="video__empty-icon">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-        'stroke-linecap="round" stroke-linejoin="round">' +
-          '<rect x="2" y="4" width="20" height="16" rx="3"/>' +
-          '<path d="M10 9.5v5l4.5-2.5-4.5-2.5z" fill="currentColor" stroke="none"/>' +
-        "</svg>" +
-      "</span>" +
-      '<p class="video__empty-title">教学视频接口待接入</p>' +
-      '<p class="video__empty-text">' +
-        (errorText ? "请求失败：" + escapeText(errorText) + "<br>" : "") +
-        "接 <code>GET /api/lesson/video?lessonId=</code> 后，这里播放老师端生成的成片。" +
-      "</p>";
-
-    frame.appendChild(box);
-    $("video-title").textContent = "教学视频";
-    $("video-sub").textContent = "接口未接入 · 显示占位";
-  }
-
-  function escapeText(text) {
-    return String(text).replace(/[&<>"]/g, function (ch) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
-    });
-  }
-
-  function formatDuration(seconds) {
-    var m = Math.floor(seconds / 60);
-    var s = Math.floor(seconds % 60);
-    return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
   /* ── 对外接口 ────────────────────────────────────────── */
@@ -279,8 +238,6 @@ export function createStage(ctx) {
     mount: function () {
       $("btn-start").addEventListener("click", startLesson);
 
-      /* 两种通知方式之一：没看完也可以点，学生说了算。
-         另一种是视频自然播完时自动触发（见 mountVideo 的 ended）。 */
       $("btn-skip-video").addEventListener("click", function () {
         notifyVideoEnd("manual");
       });
@@ -324,6 +281,7 @@ export function createStage(ctx) {
     leave: function () {
       /* 离开时把在途打字指示器收掉，避免下次进来还挂着 */
       hideTyping();
+      destroyPlayer();
     },
 
     /* 换课：清空对话、开场白进度与视频，回到课前 */
@@ -337,9 +295,9 @@ export function createStage(ctx) {
       input.style.height = "auto";
       input.placeholder = "说点什么，或向老师提问…";
 
-      $("video-frame").innerHTML = "";
-      $("video-title").textContent = "教学视频";
-      $("video-sub").textContent = "老师端生成";
+      destroyPlayer();
+      $("video-player-slot").replaceChildren();
+      $("video-player-status").textContent = "等待接入外部视频播放器";
 
       showPane("idle");
     },

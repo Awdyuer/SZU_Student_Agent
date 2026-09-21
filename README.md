@@ -26,12 +26,12 @@
 ## 功能
 
 - **选课**：先选课程（高等数学、线性代数、通信原理、操作系统），再选已上过或本周要上的周次课时
-- **课时入口**：选择课时后再决定进入课堂或课后；未开放周次不显示，直接访问链接也会被拦回
+- **课时入口**：已上过的课只显示课后，尚未上过的本周课程只显示课堂；未开放周次不显示，不匹配的直达链接会被拦回
 - **课堂**：完整的 4 阶段流程，从课前课程卡一路走到结束态
 - **对话区**：课堂聊天、总结复述、深入思考与课堂讨论采用统一的固定尺寸，消息在框内滚动
 - **课后**：预留中，见「已知限制」
 - **深浅色主题**：浅色 / 深色 / 跟随系统，右上角切换，带首屏防闪
-- **视频**：本地测试片（H.264）能播、能拖进度条；播完自动通知后端，也可手动点「看完了」
+- **视频**：只保留外部播放器挂载接口；业务方播放器负责渲染与播放结束回调
 - **响应式**：窄屏卡片改单列
 - **动效**：保留消息、提示和悬停等局部反馈；页面与课堂阶段切换不播放动画
 - **可访问性**：键盘可达、焦点管理、`aria-live` 会话区
@@ -52,6 +52,26 @@
 node --version
 npm --version
 ```
+
+### 快速配置
+
+拿到项目后，在项目根目录执行以下命令即可安装依赖并启动开发环境：
+
+```powershell
+# Windows PowerShell
+npm ci
+npm run dev
+```
+
+```bash
+# macOS / Linux
+npm ci
+npm run dev
+```
+
+启动成功后打开 <http://localhost:3000>。项目默认使用本地 Mock 数据，因此无需配置后端即可体验全部现有流程。
+
+Windows 用户也可以直接双击根目录的 `启动演示.cmd`，脚本会在首次启动时自动安装依赖并打开页面。
 
 ### 后端地址
 
@@ -182,7 +202,7 @@ npm start
 
 **Next.js 负责应用入口、根布局、页面元数据、全局样式和生产构建。** 当前迁移优先保证行为等价：原有课堂编排模块作为客户端兼容层挂载，后续可以按阶段逐步替换成独立 React 组件，而不需要再次改动接口契约。
 
-**课堂主体是 Client Component。** 视频、主题、输入框、局部反馈动画、`localStorage` 与实时会话都依赖浏览器能力；后端接口仍然通过 `src/legacy/api.js` 访问，不在 Next.js 中重复实现业务后端。
+**课堂主体是 Client Component。** 外部播放器挂载、主题、输入框、局部反馈动画、`localStorage` 与实时会话都依赖浏览器能力；后端接口仍然通过 `src/legacy/api.js` 访问，不在 Next.js 中重复实现业务后端。
 
 **界面切换不依赖动画。** Hash 页面、课堂 Stage、总结编辑/反馈视图都直接更新显隐状态；消息、Toast、悬停等局部反馈动画不参与路由和阶段状态管理。
 
@@ -198,6 +218,31 @@ export var USE_MOCK = false;
 
 课程目录预计由 `GET /api/student/courses` 返回：`{ courses: [{ courseId, name, summary, icon, currentWeek, lessons: [{ lessonId, week, chapter, title, summary, status, estimatedMinutes, knowledgePoints }] }] }`。后端应只返回该学生已选课程，并以真实教学进度标记课时。课堂仍通过 `api.js` 获取课时和交互数据；教师端需要服务端密钥的接口不能从浏览器直接调用。
 
+### 视频播放器接入
+
+项目不包含视频文件，也不会创建原生 `<video>`。业务方在进入教学视频阶段前注册播放器：
+
+```js
+window.StudentAgentVideoPlayer = {
+  mount(container, context) {
+    // 使用你们自己的播放器挂载到 container。
+    // context.video 是 GET /api/lesson/video 返回的视频信息。
+    // 播放结束时必须调用 context.onEnded()。
+    const player = createYourPlayer(container, {
+      source: context.video,
+      startSeconds: context.startSeconds,
+      onEnded: context.onEnded,
+      onError: context.onError,
+    });
+
+    // 页面离开或切换课时时会调用此清理函数。
+    return () => player.destroy();
+  },
+};
+```
+
+`context` 还包含当前 `lessonId`。如果播放器脚本在页面初始化后加载，也可以调用 `window.StudentAgentVideoPlayerBridge.register(adapter)` 注册同样的 adapter。
+
 完整的接口契约、请求响应示例、以及后端需要补齐的能力清单，见 **[后端接口说明](docs/api/后端接口说明.md)**。
 
 **想看它运行时一步步发生什么** → [运行时流程](docs/architecture/RUNTIME.md)（24 步）
@@ -212,4 +257,4 @@ export var USE_MOCK = false;
 - 课后页面是空占位，接口契约已备好但未实现。
 - 阶段 4 的多人讨论是单人 mock（后端目前 `student_id` 硬编码，无班级/讨论组结构）。
 - 掌握度（0–5 星）在前端还没有展示。
-- 多课程和周次目前是演示数据；除操作系统第 3 周外，其余课时没有真实教学视频，使用视频占位与通用模拟反馈。
+- 多课程和周次目前是演示数据；视频播放器和视频数据需由业务方接入，未接入时显示挂载占位。

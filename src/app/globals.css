@@ -177,6 +177,13 @@ body::before {
   gap: 24px;
 }
 
+.hub__grid--single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+}
+
 /* ── 卡片 ────────────────────────────────────────────────── */
 .card {
   position: relative;
@@ -743,75 +750,25 @@ body::before {
   flex: 1;
 }
 
-/* 进度轨 + 底栏 + 各段间距占掉的高度，用于反推视频可用高度 */
-.stage--video { --video-chrome: 380px; }
-
-.video__frame {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  /* 高度不够时收窄宽度来维持 16:9 —— 直接限高会把画面压扁 */
-  max-width: calc((100vh - var(--video-chrome)) * 16 / 9);
-  max-width: calc((100dvh - var(--video-chrome)) * 16 / 9);
-  margin-inline: auto;
-  overflow: hidden;
-  background: #0b0b0c;
-  border: 1px solid var(--surface-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-rest);
-}
-.video__frame video {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: contain;
-}
-
-/* 视频占位 */
-.video__empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 30px;
-  text-align: center;
-}
-.video__empty-icon {
+/* 业务方播放器只挂载到这个容器，项目不创建原生 video 元素。 */
+.video-player-slot {
   display: grid;
   place-items: center;
-  width: 62px;
-  height: 62px;
-  color: rgba(255, 255, 255, .8);
-  background: rgba(255, 255, 255, .10);
-  border-radius: 50%;
-}
-.video__empty-icon svg { width: 28px; height: 28px; }
-.video__empty-title {
-  margin: 0;
-  font-size: 16px;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+  overflow: hidden;
+  color: var(--text-3);
+  background: var(--surface-solid);
+  border: 1px dashed var(--brand-border);
+  border-radius: 22px;
+  font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, .92);
+  text-align: center;
 }
-.video__empty-text {
-  margin: 0;
-  max-width: 40em;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, .68);
-}
-.video__empty code {
-  padding: 2px 7px;
-  font-family: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, .82);
-  background: rgba(255, 255, 255, .12);
-  border-radius: 5px;
-}
-
-.video__bar {
+.video-player-slot > * { width: 100%; height: 100%; }
+.video-player-actions {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -823,16 +780,8 @@ body::before {
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   backdrop-filter: saturate(180%) blur(24px);
 }
-
-.video__info { flex: 1; min-width: 0; }
-
-.video__title {
-  margin: 0 0 3px;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -.01em;
-}
-.video__sub {
+.video-player-status {
+  flex: 1;
   margin: 0;
   font-size: 13px;
   color: var(--text-2);
@@ -1350,8 +1299,8 @@ body::before {
   .composer      { padding: 12px; }
 
   /* 窄屏进度轨变竖向、页面本来就要滚动，限宽反而不合适 */
-  .video__frame  { border-radius: var(--r-md); max-width: none; }
-  .video__bar    { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px 18px; }
+  .video-player-slot { border-radius: var(--r-md); max-width: none; }
+  .video-player-actions { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px 18px; }
   .view__badge   { display: none; }
 
   /* 对话框在窄屏上占满可用宽度，消息区内部滚动 */
@@ -1444,7 +1393,7 @@ body::before, :root[data-theme="dark"] body::before { background: none; }
 .back { color: var(--brand); background: var(--surface-solid); border-color: var(--surface-border); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .back:hover { background: var(--brand-soft); border-color: var(--brand-border); }
 .view__badge { color: var(--brand); background: var(--brand-soft); }
-.panel, .lesson, .stage--chat, .conversation-panel, .video__bar, .discuss-topic, .discuss-panel, .done {
+.panel, .lesson, .stage--chat, .conversation-panel, .video-player-actions, .discuss-topic, .discuss-panel, .done {
   background: var(--surface-solid);
   border: 1px solid var(--surface-border);
   border-radius: 22px;

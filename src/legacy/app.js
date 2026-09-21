@@ -62,7 +62,7 @@ var themeSwitch = null;
 
    #                                → 我的课程
    #/course/:courseId               → 已开放周次
-   #/lesson/:courseId/:lessonId     → 课堂 / 课后入口
+   #/lesson/:courseId/:lessonId     → 按授课状态显示课堂或课后入口
    #/class/:courseId/:lessonId      → 课堂
    #/review/:courseId/:lessonId     → 课后
    ═══════════════════════════════════════════════════════════ */
@@ -138,6 +138,10 @@ function availableLessons(course) {
   return course.lessons.filter(function (item) { return item.status === "completed" || item.status === "current"; });
 }
 
+function lessonDestination(item) {
+  return item.status === "completed" ? "review" : "class";
+}
+
 function makeNode(tag, className, content) {
   var node = document.createElement(tag);
   if (className) node.className = className;
@@ -205,6 +209,10 @@ function selectLesson(course, item) {
     resetClassroom();
   }
   $("hub-title").textContent = course.name + " · 第 " + item.week + " 周 · " + item.title;
+  $("hub").querySelector(".hub__grid").classList.add("hub__grid--single");
+  document.querySelectorAll("#hub [data-goto]").forEach(function (card) {
+    card.hidden = card.dataset.goto !== lessonDestination(item);
+  });
   $("review-title").textContent = course.name + " · " + item.title + " · 课后";
   document.querySelector("#view-review .placeholder__text").textContent =
     "课后内容尚待接入。当前可先体验选课、按周选课时与课堂流程。";
@@ -226,6 +234,10 @@ function renderRoute() {
       return;
     }
     selectLesson(course, item);
+    if ((route.name === "class" || route.name === "review") && route.name !== lessonDestination(item)) {
+      location.replace(lessonHash(course.courseId, item.lessonId));
+      return;
+    }
     if (route.name === "lesson") { showView(VIEWS.lesson); return; }
     if (route.name === "class") { openLessonRoute(); return; }
     if (route.name === "review") { showView(VIEWS.review); reviewView.enter(); return; }
@@ -334,6 +346,11 @@ function applyServerTurn(res) {
   if (phase === hostPhase) return;      /* 没变，什么都不做 */
 
   hostPhase = phase;
+  if (phase === "ending") {
+    var course = courseById(currentCourseId);
+    var completedLesson = course && course.lessons.find(function (item) { return item.lessonId === currentLessonId; });
+    if (completedLesson) completedLesson.status = "completed";
+  }
   setStatus(labelOf(phase));
 
   var target = uiOf(phase);

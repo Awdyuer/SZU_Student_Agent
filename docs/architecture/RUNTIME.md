@@ -22,7 +22,7 @@
 
 6. **显示学生课程卡** → 演示模式读取本地课程目录；真实模式请求 `GET /api/student/courses`
 7. **选择课程和周次** → 只显示 `completed` 与 `current` 课时；未开放课时的深链接会被拦回周次页
-8. **选择课时** → 进入课堂 / 课后双入口，并为该课时读取或生成独立 `sessionId`
+8. **选择课时** → 已上过的课只显示课后，本周尚未上过的课只显示课堂，并为该课时读取或生成独立 `sessionId`
 9. **（可选）切主题** → 改根节点属性 → 所有 CSS 变量重算 → 全页配色变（没有一行 JS 逐个改元素）
 
 ---
@@ -41,7 +41,7 @@
 11. **后端返回** `hostPhase: "intro"` → AI 介绍出现 + 「开始播放教学视频」按钮
     → `applyServerTurn` 发现"已经在目标界面了"，界面不变（这是刻意的，让网络延迟不影响体感）
 12. **点「开始播放教学视频」** → 本地切到视频界面，**不发请求**
-13. **视频加载** → `GET /api/lesson/video` 拿地址 → `GET *.mp4`（浏览器会发多个 Range 请求）
+13. **视频加载** → `GET /api/lesson/video` 获取视频信息 → 交给外部播放器 adapter
 14. **视频播完**（`ended` 事件，或点「看完了」）→ `POST /api/chat` `/视频结束`
 15. **后端返回** `hostPhase: "recap_discussion"` → 立即切到总结复述对话框
 16. **提交总结** → `POST /api/summary/review` → 在对话消息中展示结构化反馈（空数组的组自动跳过）
@@ -87,7 +87,7 @@
 | 进课堂 | `GET /api/lesson` | 课时信息 |
 | 开始上课 | `POST /api/chat` `/上课开始` | 介绍 + `intro` |
 | 播放视频 | `GET /api/lesson/video` | 视频地址 |
-| 视频加载 | `GET *.mp4`（Range） | 视频数据 |
+| 视频加载 | 由外部播放器决定 | 前端只传递视频信息和播放结束回调 |
 | 视频结束 | `POST /api/chat` `/视频结束` | `recap_discussion` |
 | 提交总结 | `POST /api/summary/review` | 对话中的结构化反馈 |
 | 进入下一阶段 | `POST /api/chat` `/继续` | `deep_inquiry` |

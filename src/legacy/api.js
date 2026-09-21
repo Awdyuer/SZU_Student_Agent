@@ -251,23 +251,9 @@ export var VIDEO_END_EVENT   = "/视频结束";  /* 视频播完，或学生点�
 export var CONTINUE_EVENT    = "/继续";      /* 学生主动请求进入下一幕 */
 export var CLASS_END_EVENT   = "/下课";      /* 学生请求结束本节课 */
 
-/* 本地测试视频（H.264 / MP4 / 42.8 秒）。
-   文件放在 public/test_information，由 Next.js 作为静态资源提供。
-   真实接入后由后端返回老师端生成的成片地址。
-   注：这个文件的 moov 在末尾，生产环境应先做 faststart
-       （ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4），
-       否则浏览器要下完整个文件才能开播。本地测试无所谓。 */
-var MOCK_VIDEO = {
-  url: "/test_information/test_vedio.mp4",
-  poster: "",
-  duration: 42.8,
-  title: "处理机调度 · 教学视频（本地测试片）",
-  source: "test"
-};
-
 export function fetchLessonVideo(lessonId) {
   if (USE_MOCK) {
-    return delay(320).then(function () { return lessonId === LESSON_ID ? MOCK_VIDEO : null; });
+    return Promise.resolve(null);
   }
   return request("GET", "/api/lesson/video?lessonId=" + encodeURIComponent(lessonId))
     .then(function (r) { return r.video; });
