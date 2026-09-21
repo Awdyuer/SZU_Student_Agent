@@ -1323,7 +1323,16 @@ def _write_dialogue_log(state: ClassroomState) -> None:
 
 def _append_dialogue_json(state: ClassroomState) -> None:
     path = ROOT / "runtime/data/dialogue-log.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # 文件可能不存在（首次运行 / runtime/data 被清空重置过）——缺了就从头建，
+    # 与 _write_mastery_state 同款容错。曾经直接 read_text，文件一缺
+    # 每轮回复末尾都会拼上 "[warn] 落盘失败"。
+    data: dict = {"student_id": None, "session_id": None, "messages": []}
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            pass
     data["student_id"] = state.get("student_id")
     data["session_id"] = state.get("session_id")
     data["messages"].append({

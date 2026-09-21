@@ -41,3 +41,4 @@ runtime/students/
 frontend/.next/
 frontend/out/
 apps/static/app/
+runtime/_backup-*/

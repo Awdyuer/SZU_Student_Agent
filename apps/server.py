@@ -185,11 +185,14 @@ def _create_session(sid: str, student_id: str, lesson_id: str,
     """学生在教室坐下：会话建好，但**不开课**（起课铃由老师的 begin 按钮按）。"""
     s = _get(sid)
     s["time_scale"] = time_scale
+    # 幂等：/start 每次进课堂都会调到这里（前端 app.js 的注释也是这么信任的）。
+    # 只有新会话需要落 idle —— 那由 initial_state 给。这里绝不能覆写 lesson_status：
+    # 曾经无条件置 idle，学生课上刷新页面再点「进入课堂」，
+    # 正在上的课就被打回待机（时钟冻结、输入框和视频按钮全消失）。
     s["state"].update({
         "time_scale": time_scale,
         "student_id": student_id,
         "lesson_id": lesson_id,
-        "lesson_status": "idle",
     })
     _persist(sid, s["state"])
 
@@ -423,6 +426,39 @@ def stop(sid: str) -> dict:
             s["state"]["lesson_status"] = "ended"
             _persist(sid, s["state"])
     return {"stopped": True, "status": "ended", "available_actions": ACTIONS["ended"]}
+
+
+@app.post("/api/demo/reset")
+def demo_reset() -> dict:
+    """演示重置：停掉所有课，清空全部运行时状态（会话 / 学生掌握档案 / 对话流水）。
+
+    给「反复演示同一节课」的场景用：下完课想从头再来一遍，不用手动清 runtime/。
+    前端结束页的「重新演示」按钮调的就是它。
+    ⚠️ 单机演示工具专用 —— 会清掉**所有**会话与学生档案，多人同上时别按。
+    """
+    stopped = 0
+    with _REGISTRY_LOCK:
+        for s in SESSIONS.values():
+            s["stop"].set()          # 通知心跳线程退出（清掉注册表后它们也会自退）
+            stopped += 1
+        SESSIONS.clear()
+
+    def _wipe(pattern: str) -> int:
+        n = 0
+        for p in ROOT.glob(pattern):
+            try:
+                p.unlink()
+                n += 1
+            except OSError:
+                pass
+        return n
+
+    cleared = {
+        "sessions": _wipe("runtime/sessions/*.json"),
+        "student_files": _wipe("runtime/students/*/*.json"),
+        "log_files": _wipe("runtime/data/*.json"),
+    }
+    return {"reset": True, "stopped_lessons": stopped, "cleared": cleared}
 
 
 @app.get("/api/session/{sid}/export")

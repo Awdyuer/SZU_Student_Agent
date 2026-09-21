@@ -12,7 +12,7 @@
 import { $, visibleRoot, showToast, appendChatMessage, el, scrollToEnd } from "./ui.js";
 
 import {
-  fetchLesson, fetchStudentCourses, startSession,
+  fetchLesson, fetchStudentCourses, startSession, resetDemo,
   fetchSessionState, fetchSessionMessages, sendStudentMessage, sendTeacherAction,
   fetchLessonStars, STAR_LABELS
 } from "./api.js";
@@ -330,6 +330,8 @@ function ctxFor() {
     sendMessage: sendMessage,
     /* 老师动作：begin / media_done / next_stage。按不按得动照 available_actions。 */
     teacherAction: teacherAction,
+    /* 演示重置：清空本机全部课堂记录。结束页的「重新演示」按钮用。 */
+    resetDemo: resetDemo,
 
     /* 讲解阶段（视频模式）直接进播放器面板。幂等 */
     enterVideo: function () {

@@ -19,15 +19,15 @@ export function createStage(ctx) {
   var nextBtn = $("reflect-next");
 
   var busy = false;
-  var MIN_LEN = 6;
 
+  /* 发送门槛只有"非空"—— 与总结复述面板保持一致，不卡最少字数 */
   function updateSubmit() {
-    submitBtn.disabled = busy || input.value.trim().length < MIN_LEN;
+    submitBtn.disabled = busy || !input.value.trim();
   }
 
   function submit() {
     var text = input.value.trim();
-    if (busy || text.length < MIN_LEN) return;
+    if (busy || !text) return;
 
     busy = true;
     input.disabled = true;

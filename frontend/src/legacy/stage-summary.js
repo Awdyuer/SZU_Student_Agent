@@ -24,15 +24,17 @@ export function createStage(ctx) {
 
   var busy = false;
 
+  /* 发送门槛只有"非空"—— 不再卡最少字数（曾有 10 字下限，
+     短答案发不出去还看不出原因）。答没答对由后端判证据说了算。 */
   function updateCount() {
     count.textContent = input.value.length + " / 600";
     count.classList.toggle("is-near", input.value.length > 510);
-    submitBtn.disabled = busy || input.value.trim().length < 10;
+    submitBtn.disabled = busy || input.value.trim().length === 0;
   }
 
   function submit() {
     var text = input.value.trim();
-    if (busy || text.length < 10) return;
+    if (busy || !text) return;
 
     busy = true;
     input.disabled = true;

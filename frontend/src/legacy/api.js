@@ -116,6 +116,15 @@ export function fetchLesson(lessonId) {
 }
 
 
+/* POST /api/demo/reset
+   → { reset: true, stopped_lessons, cleared: { sessions, student_files, log_files } }
+   演示重置：清空本机全部会话、学生掌握档案与对话流水，回到「从没上过课」。
+   结束页的「重新演示」按钮用；多人同上时别按（会把别人的课也清掉）。 */
+export function resetDemo() {
+  return request("POST", "/api/demo/reset");
+}
+
+
 /* ═══════════════════════════════════════════════════════════
    ② 会话
 

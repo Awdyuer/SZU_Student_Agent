@@ -203,6 +203,18 @@ curl -X DELETE http://127.0.0.1:8000/api/session/class-1                      # 
 **没有 `{ ok }` 信封**，直接返回整个对象，而且响应头带 `Content-Disposition: attachment`
 （按「下载」设计的，浏览器 `fetch` 仍能读到 body）。
 
+### 11. 演示重置（结束页「重新演示」按钮）
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/demo/reset
+# → { "reset": true, "stopped_lessons": 1, "cleared": { "sessions": 2, "student_files": 2, "log_files": 3 } }
+```
+
+停掉**所有**心跳线程并清空全部运行时状态：`runtime/sessions/*.json`、
+`runtime/students/*/*.json`、`runtime/data/*.json`。给单机反复演示同一节课用；
+⚠️ 多人同上时别调——会把所有学生的课和档案一起清掉。清空后照常
+`POST /api/session/start`（旧 session_id 也行），拿到的是崭新的待机会话。
+
 ## 前端注意事项
 
 1. **视频播放器完全归前端**：视频文件、播放、暂停、拖动都自己管；
