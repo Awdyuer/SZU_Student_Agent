@@ -214,8 +214,7 @@ function selectLesson(course, item) {
     card.hidden = card.dataset.goto !== lessonDestination(item);
   });
   $("review-title").textContent = course.name + " · " + item.title + " · 课后";
-  document.querySelector("#view-review .placeholder__text").textContent =
-    "课后内容尚待接入。当前可先体验选课、按周选课时与课堂流程。";
+  /* 课后页的报告内容由 view-review.js 在 enter() 时填 */
 }
 
 function renderRoute() {

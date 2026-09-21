@@ -1274,6 +1274,177 @@ body::before {
   border-radius: 50%;
 }
 
+/* ═══════════ 课后：学习报告 ══════════════════════════════════ */
+
+.report__content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── 概览 ────────────────────────────────────────────────── */
+
+.report__lede {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report__lede-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.report__lede-title {
+  margin: 0;
+  font-size: clamp(24px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -.035em;
+}
+
+.report__lede-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.report__lede-num {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+/* ── 报告卡片 ────────────────────────────────────────────── */
+
+.report__card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.report__card-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.report__kp-list,
+.report__stage-list,
+.report__advice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── 知识点掌握 ──────────────────────────────────────────── */
+
+.report__kp {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14.5px;
+}
+
+.report__kp-num {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  flex: none;
+
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 50%;
+}
+
+.report__kp-name { flex: 1; min-width: 0; }
+
+/* 0 星不画星星，所以这里有「未检测」三个字和五颗星两种形态 */
+.report__stars {
+  display: inline-flex;
+  gap: 2px;
+  flex: none;
+  font-size: 14px;
+}
+
+.report__star        { color: rgba(120, 120, 128, .35); }
+.report__star.is-on  { color: var(--brand); }
+.report__stars-none  { font-size: 12.5px; color: var(--text-3); }
+
+.report__kp-status {
+  flex: none;
+  min-width: 64px;
+  padding: 4px 10px;
+
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 999px;
+}
+
+.report__kp--untouched .report__kp-status {
+  color: var(--text-3);
+  background: rgba(120, 120, 128, .12);
+}
+
+/* ── 各阶段表现 ──────────────────────────────────────────── */
+
+.report__stage {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 14.5px;
+}
+
+.report__stage-name    { font-weight: 600; }
+.report__stage-time    { font-size: 13.5px; color: var(--text-2); }
+.report__stage-targets { margin-left: auto; font-size: 13px; color: var(--text-3); }
+
+/* ── 课后建议 ────────────────────────────────────────────── */
+
+.report__advice {
+  font-size: 14px;
+  line-height: 1.62;
+  color: var(--text-2);
+}
+.report__advice strong { color: var(--text-1); }
+
+/* ── 载入 / 失败 / 空态 ──────────────────────────────────── */
+
+.report__state {
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.report__state .placeholder { width: 100%; }
+
+.report__state-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
 /* ── 动画 ────────────────────────────────────────────────── */
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -1314,6 +1485,13 @@ body::before {
 
   .done              { padding: 34px 26px 30px; }
   .done__title       { font-size: 25px; }
+
+  /* 课后报告：一行的「序号 名称 星星 状态」在窄屏挤不下，让名称占满一行后换行 */
+  .report__lede-meta     { gap: 6px 18px; }
+  .report__kp            { flex-wrap: wrap; row-gap: 7px; }
+  .report__kp-name       { flex: 1 1 auto; }
+  .report__kp-status     { margin-left: auto; }
+  .report__stage-targets { margin-left: 0; width: 100%; }
 
   .theme-switch      { top: 16px; right: 16px; }
   .theme-switch__btn { width: 36px; height: 36px; }

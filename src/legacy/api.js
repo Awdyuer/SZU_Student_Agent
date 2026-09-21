@@ -512,3 +512,112 @@ export function fetchDiscussionEnd(lessonId) {
   return request("GET", "/api/discussion/end?lessonId=" + encodeURIComponent(lessonId))
     .then(function (r) { return r.closing; });
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   ⑧ 课后学情报告（学生版）
+   GET /api/session/<sessionId>/export?fmt=json
+   → { student_id, lesson_id, session_id, lesson_elapsed_minutes,
+       knowledge_points: [{ kp_id, title, stars, status }],
+       stage_snapshots:  [{ type, snapshot_id, student_id, lesson_id,
+                            stage, stage_elapsed_minutes,
+                            targets_closed, targets_open,
+                            stars_snapshot, evidence, occurred_at }] }
+
+   ⚠️ 这个接口由后端「主动引导智能体」提供，不在本仓库：
+      apps/server.py 的 export()，同一函数的 fmt=md 分支就是它自己的
+      「# 学情报告」。三点与其它接口不同，接的时候要注意：
+
+      · **没有 { ok } 信封** —— 直接返回整个响应对象，别去拆 r.report；
+      · 响应头带 Content-Disposition: attachment（下载语义），
+        fetch 仍能读到 body，但后端配 CORS 之前跨域会被浏览器拦；
+      · sessionId 口径不同：后端用自己下发的会话 id（形如 cls-xxxx，
+        前端从 POST /api/session/start 拿），不是本文件
+        localStorage 里那个按课时生成的 UUID。
+
+      报告只在课已结束（lesson_status === "ended"）后才有内容。
+   ═══════════════════════════════════════════════════════════ */
+
+/* 0–5 星标签。口径取自后端 rules/interaction/MASTERY-STAR-RULES.md，
+   那份文件自称「唯一权威规则，任何页面不得另算一套」——
+   这里不重算星级，只是补一张标签查表：后端决定星级的 STAR_STATUS 缺少
+   0 和 5 两个键，5 星会被它报成「未检测」，所以要拿这张表兜底。 */
+export var STAR_LABELS = {
+  0: "未检测",
+  1: "已接触",
+  2: "初步理解",
+  3: "理解中",
+  4: "接近掌握",
+  5: "已掌握"
+};
+
+/* 后端 md 分支用的「理解线」：星级 <= 2 视为没达标 */
+export var REPORT_WEAK_STARS = 2;
+
+/* 演示数据。形状与真后端 export() 的 fmt=json 完全一致。
+   lessonId 只在这个 mock 分支用得上 —— 真请求只需要 sessionId，
+   后端按会话取课时。 */
+function buildMockReport(lessonId) {
+
+  /* 其它课时没有掌握数据。真后端在这种情况下 kp_stars 是空对象，
+     于是 knowledge_points 与 stage_snapshots 都是空数组 —— 界面走空态。 */
+  if (lessonId !== LESSON_ID) {
+    return {
+      student_id: "student-001",
+      lesson_id: lessonId,
+      session_id: null,
+      lesson_elapsed_minutes: null,
+      knowledge_points: [],
+      stage_snapshots: []
+    };
+  }
+
+  /* 六个知识点铺满 0–5 星。最后一条刻意留 0 星：
+     MASTERY-STAR-RULES.md 规定 0 星不画星星、只显示「未检测」，
+     少了它这条规则就没法在界面上验。 */
+  var stars = [5, 3, 2, 4, 1, 0];
+
+  return {
+    student_id: "student-001",
+    lesson_id: LESSON_ID,
+    session_id: "cls-demo-0001",
+    lesson_elapsed_minutes: 38.2,
+    knowledge_points: MOCK_LESSON.knowledgePoints.map(function (title, i) {
+      var value = stars[i] === undefined ? 0 : stars[i];
+      return {
+        kp_id: "KP-" + String(i + 1).padStart(3, "0"),
+        title: title,
+        stars: value,
+        status: STAR_LABELS[value]
+      };
+    }),
+    /* 本课 class_discussion 在 lesson-plan.json 里 enabled:false，
+       所以只走三幕。stage 取值同 host_phase。 */
+    stage_snapshots: [
+      { type: "stage_snapshot", snapshot_id: "ss-001", student_id: "student-001",
+        lesson_id: LESSON_ID, stage: "guided_learning", stage_elapsed_minutes: 14.2,
+        targets_closed: [], targets_open: ["KP-001", "KP-002", "KP-003", "KP-004", "KP-005", "KP-006"],
+        stars_snapshot: { "KP-001": 1 }, evidence: "本幕无文字证据",
+        occurred_at: "2026-09-15T14:12:00+08:00" },
+      { type: "stage_snapshot", snapshot_id: "ss-002", student_id: "student-001",
+        lesson_id: LESSON_ID, stage: "recap_discussion", stage_elapsed_minutes: 9.0,
+        targets_closed: ["KP-001", "KP-002"], targets_open: ["KP-003", "KP-004", "KP-005", "KP-006"],
+        stars_snapshot: { "KP-001": 3, "KP-002": 3 }, evidence: "学生能用自己的话说明三级调度各自的对象与时机。",
+        occurred_at: "2026-09-15T14:23:00+08:00" },
+      { type: "stage_snapshot", snapshot_id: "ss-003", student_id: "student-001",
+        lesson_id: LESSON_ID, stage: "deep_inquiry", stage_elapsed_minutes: 7.5,
+        targets_closed: ["KP-001", "KP-002", "KP-003", "KP-004"],
+        targets_open: ["KP-005", "KP-006"],
+        stars_snapshot: { "KP-001": 5, "KP-002": 3, "KP-003": 2, "KP-004": 4 },
+        evidence: "能从排队论角度解释调度与等待队列的关系。",
+        occurred_at: "2026-09-15T14:31:00+08:00" }
+    ]
+  };
+}
+
+export function fetchLessonReport(sessionId, lessonId) {
+  if (USE_MOCK) {
+    return delay(520).then(function () { return buildMockReport(lessonId); });
+  }
+  return request("GET", "/api/session/" + encodeURIComponent(sessionId) + "/export?fmt=json");
+}
