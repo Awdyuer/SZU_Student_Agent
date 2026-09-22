@@ -208,6 +208,14 @@ export AGENT_LLM_MODEL=deepseek-chat
 
 ## 老师配一门课：三步
 
+> **现在有接口了**：`POST /api/teacher/lesson` 一次传完整的一节课
+> （元数据 + 阶段 + 段落 + 知识点），落盘成 `lesson-data/lessons/<lesson_id>.json`，
+> 不用再手工改三处文件；系统也不再只能跑一节课。契约见
+> [apps/API.md 第 10 节](apps/API.md)，回读用 `GET /api/teacher/lesson/{id}`。
+>
+> 下面写的是直接改文件的老路子 —— 它仍然有效（`lesson-data/lesson-plan.json`
+> 那一节原样保留），适合还没接接口时的本地调试。
+
 ### 1. 定阶段与时长
 
 编辑 `lesson-data/lesson-plan.json`：
@@ -309,6 +317,9 @@ lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
 | `rules/interaction/DIALOGUE-LOG-FORMAT.md` | 会话状态字段（含编排器字段） |
 | `rules/interaction/LESSON-CONTENT-FORMAT.md` | `LESSON-CONTENT` 与 `TMISSION` 的分工 |
 | `stages/*/README.md` | 各阶段在干什么、没配置时怎么降级 |
+| `apps/API.md` | **会话层接口**：一节课的完整时序、九个会话接口、老师上传课时定义（第 10 节） |
+| `apps/API-SAAS.md` | **SaaS 底座 × 教师端对接**：双向调用关系、教师端两条接入路径、鉴权现状与缺口清单 |
+| `apps/PLATFORM-INTEGRATION.md` | **平台对接分析**：SZU-AgentEduPlatform 接口的逐行实测、与学生端的字段映射、差在哪 |
 | `frontend/docs/api/后端接口说明.md` | **学生端接口说明**：统一消息入口、控制与同步接口、课后报告契约 |
 
 ---
@@ -342,5 +353,7 @@ lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
 | **课后报告只在同源下能跑** | 页面已接真实导出接口（`USE_MOCK` 那套 mock 已随前端重构移除）。生产由 FastAPI 同源托管，正常；但**后端没有 CORS 中间件**，前端跑 `localhost:3000`、后端在 `127.0.0.1:8000` 时请求会被浏览器拦掉。联调前需给 FastAPI 加 `CORSMiddleware`，或让前端走同源代理 | 中 |
 | **报告可能缺少「未接触」的知识点** | 后端只在 `kp_stars` 有条目时才输出知识点，学生完全没碰过的不进数组，于是整个 `knowledge_points` 可能是空的，页面画不出「未检测」那些行。建议后端按课时知识点目录补全，未接触的返回 `stars: 0` | 中 |
 | **后端 `STAR_STATUS` 只定义了 1–4 星** | 缺 0 和 5 两个键，所以一个 5 星知识点会被后端报成 `"status": "未检测"`。前端已按权威规则表本地兜底（不重算星级，只补标签），后端仍应补上这两个键 | 低 |
+| **上传课时的判星链路是空的** | `EVIDENCE_GROUPS`（`agent.py`）是写死的旧课时关键词表。老师上传的新知识点没有对应组 → `match_evidence()` 返回 `(0, 0)` → 复述/探究阶段**不会靠关键词升星**，`judge_advance` 的「证据充分」分支也不会触发，只能按时间预算切幕。知识点能被讲、能被问（题库已按课时隔离，不会再借旧课的题），但星级到不了 3 星以上。解法是让上传时带 per-KP 关键词 | 中 |
+| **课时定义无鉴权** | `POST /api/teacher/lesson` 会写盘且不需要凭证，而 `apps/start.py` 默认绑 `0.0.0.0`。局域网内任何人都能覆盖课时、进而向课堂注入任意提示词内容。生产部署前需要加 token 或反向代理 | 中（仅部署相关） |
 
 已解决：~~无定时器~~（学生不发消息就无法切幕）—— 心跳时钟见上文「课堂里跑起来」。
