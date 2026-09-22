@@ -1,260 +1,325 @@
-#  AI 学习空间 · 学生端
+# 主动引导智能体
 
-面向学生的 AI 课堂前端。把「每节课 4 阶段逐步加深」的教学模型做成学生看得见的界面。
+一个由**课程计划驱动、AI 自动推进**的课堂智能体。
 
-基于 **Next.js App Router + React** 实现。课堂主体运行在 Client Component 中，后端仍保持为独立服务；前端只根据后端下发的 `hostPhase` 更新课堂阶段。
-
----
-
-## 教学模型
-
-一节课拆成 4 个阶段，每阶段占课堂时间的固定比例：
-
-| 阶段 | 时间占比 | 学生做什么 | 界面上是什么 |
-| --- | --- | --- | --- |
-| **引导学习** | 0–50% | 听讲解、看视频、随时提问 | AI 对话 + 教学视频 |
-| **总结复述** | 50–70% | 用自己的话把刚学的讲一遍 | 对话框中提交总结并查看 AI 反馈 |
-| **深入思考** | 70–85% | 想底层逻辑、实际问题和跨学科关系 | 对话框中依次回答三个视角的问题 |
-| **课堂讨论** | 85–100% | 老师引导，同学之间交流 | 老师 / 同学 / 我 的讨论区 |
-
-页头右上方始终显示**当前处于哪一幕**（课程介绍 / 引导学习 / 总结复述 …）。页面和课堂阶段切换会立即完成，不播放切换动画。
-
-**前端不决定演到哪一幕。** 每次后端响应回来后比对 `hostPhase`，变了才切界面 —— 切幕时机由后端的编排器 `judge_advance` 决定（真实时钟 + 证据 + 策略，见 `docs/architecture/ORCHESTRATOR.md`）。
+> 本仓库是 `HELLO-APL/Dify-Classroom-Interactive-Agent` 的重构版。
+> 旧仓库 `D:\project\Dify 课堂互动智能体` 保留不动，仅作参照。
+>
+> **主要变化**：移除学生标注与 n8n · 改为四阶段（可配置）编排模型 · 新增 LangGraph 编排结构 · 学生端统一并入 `frontend/`。
 
 ---
 
-## 功能
+## 这是什么
 
-- **选课**：先选课程（高等数学、线性代数、通信原理、操作系统），再选已上过或本周要上的周次课时
-- **课时入口**：已上过的课只显示课后，尚未上过的本周课程只显示课堂；未开放周次不显示，不匹配的直达链接会被拦回
-- **课堂**：完整的 4 阶段流程，从课前课程卡一路走到结束态
-- **对话区**：课堂聊天、总结复述、深入思考与课堂讨论采用统一的固定尺寸，消息在框内滚动
-- **课后**：预留中，见「已知限制」
-- **深浅色主题**：浅色 / 深色 / 跟随系统，右上角切换，带首屏防闪
-- **视频**：只保留外部播放器挂载接口；业务方播放器负责渲染与播放结束回调
-- **响应式**：窄屏卡片改单列
-- **动效**：保留消息、提示和悬停等局部反馈；页面与课堂阶段切换不播放动画
-- **可访问性**：键盘可达、焦点管理、`aria-live` 会话区
+学生端不是一个"学生问、AI 答"的聊天机器人，而是**一个按老师排好的课程计划自动推进的课堂**：
 
----
-
-## 环境配置
-
-### 环境要求
-
-- Node.js **20.9 或更高版本**
-- npm（随 Node.js 一起安装）
-- Chrome 111+、Edge 111+、Firefox 111+ 或 Safari 16.4+
-
-可以先确认本机环境：
-
-```bash
-node --version
-npm --version
+```
+老师配置 lesson-plan.json  ──→  AI 每轮读计划 + 判证据 + 判耗时  ──→  自动切幕
+（上几个阶段、每阶段多久）        （编排器 host_phase 状态机）          （把课上完）
 ```
 
-### 快速配置
+**核心设计：** 提示词负责"怎么教"，数据负责"教什么、按什么顺序教、多久教完"。改课程结构不用改提示词。
 
-拿到项目后，在项目根目录执行以下命令即可安装依赖并启动开发环境：
-
-```powershell
-# Windows PowerShell
-npm ci
-npm run dev
-```
-
-```bash
-# macOS / Linux
-npm ci
-npm run dev
-```
-
-启动成功后打开 <http://localhost:3000>。项目默认使用本地 Mock 数据，因此无需配置后端即可体验全部现有流程。
-
-Windows 用户也可以直接双击根目录的 `启动演示.cmd`，脚本会在首次启动时自动安装依赖并打开页面。
-
-### 后端地址
-
-项目默认使用本地 Mock 数据，不启动后端也能完整体验课堂流程。
-
-需要连接独立后端时，在项目根目录复制环境变量模板：
-
-```powershell
-# Windows PowerShell
-Copy-Item .env.example .env.local
-```
-
-```bash
-# macOS / Linux
-cp .env.example .env.local
-```
-
-然后修改 `.env.local`：
-
-```dotenv
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-```
-
-同时把 `src/legacy/api.js` 中的 Mock 开关改为：
-
-```js
-export var USE_MOCK = false;
-```
-
-说明：
-
-- 不设置 `NEXT_PUBLIC_API_BASE_URL` 时，请求默认发送到当前前端域名下的 `/api`。
-- 前后端不同端口或域名时，后端需要允许前端地址进行 CORS 请求。
-- `.env.local` 必须放在项目根目录，不要放进 `src/`，也不要提交到 Git。
-- `NEXT_PUBLIC_` 变量会进入浏览器端代码，不能在其中保存密码、Token 或其他机密信息。
-- 修改 `.env.local` 后需要重新启动开发服务器；生产环境变量需要在执行 `npm run build` 前设置。
-
-## 快速启动
-
-### Windows 双击演示
-
-双击项目根目录的 [启动演示.cmd](启动演示.cmd)。脚本会检查 Node.js、首次运行时自动执行 `npm ci`、选择 3000–3010 中的空闲端口，并在服务就绪后打开浏览器。保持启动窗口打开；演示结束后在窗口中按回车停止服务。默认使用 Mock 数据，无需启动后端。
-
-如果本项目的开发服务已经在运行，再次双击会直接打开已有页面，不会重复启动。`node_modules/` 是运行依赖，`.next/dev/` 是加快后续开发启动的缓存；不要为了减少文件数而在每次启动前删除它们。
-
-也可在 PowerShell 中运行 `./scripts/start-demo.ps1`。
-
-### 命令行启动
-
-在项目根目录依次执行：
-
-```bash
-# 1. 按 package-lock.json 安装确定版本的依赖
-npm ci
-
-# 2. 启动开发服务器
-npm run dev
-```
-
-浏览器打开：
-
-```text
-http://localhost:3000
-```
-
-如果 `3000` 端口被占用，Next.js 会提示实际使用的地址，也可以手动指定端口：
-
-```bash
-npm run dev -- --port 3001
-```
-
-### 生产环境启动
-
-```bash
-# 先执行代码检查
-npm run lint
-
-# 创建生产构建
-npm run build
-
-# 启动生产服务器
-npm start
-```
-
-生产服务器默认访问地址同样是 `http://localhost:3000`。
+> 本仓库现在包含智能体、FastAPI 会话层和 Next.js 学生端。所有阶段共用
+> `POST /api/session/{sid}/message`，由后端 `host_phase` 决定当前教学行为。
 
 ---
 
 ## 目录结构
 
 ```
-.
-├── src/
-│   ├── app/
-│   │   ├── layout.js       根布局、页面元数据与主题首屏防闪
-│   │   ├── page.js         学生端入口页面（Server Component）
-│   │   └── globals.css     全局设计令牌与组件样式
-│   ├── components/
-│   │   ├── StudentApp.js   课堂客户端边界与初始化入口
-│   │   ├── courseMarkup.js 课程与周次选择界面
-│   │   └── legacyMarkup.js 迁移期间保留的页面结构
-│   └── legacy/             课程目录、课堂状态机、阶段与 API
-├── public/                 Next.js 静态资源目录
-├── next.config.mjs     Next.js 配置
-├── package.json        依赖与开发/构建命令
-├── docs/
-│   ├── architecture/       架构、运行流程、编排器规范和 Mermaid 流程图
-│   └── api/                后端接口契约
-├── .env.example        后端地址配置示例
-└── jsconfig.json       `@/` 指向 `src/`
+主动引导智能体/
+├── rules/                       # 规则层（AI 每轮只读，老师维护）
+│   ├── KNOWLEDGE-BASE.md        # 知识点目录（含 4 个探究字段）
+│   ├── interaction/             # 课堂节奏规则、判星规则、各文件格式模板
+│   │   ├── SKILL.md             #   课堂互动 Skill（阶段行为）
+│   │   ├── MASTERY-STAR-RULES.md   # 0-5 星唯一权威规则
+│   │   └── *-FORMAT.md          #   七个运行时文件的字段模板
+│   └── dialogue/SKILL.md        # 对话 Skill（学生轮次路由）
+│
+├── lesson-data/                 # 课程数据层（老师配置）
+│   ├── lesson-plan.json         #   ★ 编排入口：阶段开关 + 时长预算 + 推进策略 + 时钟策略
+│   └── segments/seg-XXX.json    #   课程片段（order 定顺序，绑定 KP）
+│
+├── stages/                      # 阶段内容层（可空壳，留空不影响运行）
+│   ├── recap_discussion/        #   复述：questions.md / rubric.md / prompt.md
+│   ├── deep_inquiry/            #   深挖：questions.md / rubric.md / prompt.md
+│   └── class_discussion/        #   讨论：questions.md / rubric.md / prompt.md
+│
+├── runtime/                     # 运行时状态（每轮读写）
+│   ├── DIALOGUE-LOG.md          #   ★ 会话控制 + 编排器字段
+│   ├── TMISSION.md              #   老师目标、核心难点、易混淆点
+│   ├── LESSON-CONTENT.md        #   本课内容（先修/新内容/任务/成功证据）
+│   ├── SMISSION.md              #   学生个人目标
+│   ├── NOTES.md                 #   工作观察与偏好
+│   ├── GLOSSARY.md              #   已挣得的词汇
+│   ├── LEARNING-RECORD.md       #   持久学习记录
+│   └── data/                    #   掌握度与对话流水（json）
+│       ├── mastery-state.json
+│       ├── mastery-history.json
+│       └── dialogue-log.json
+│
+├── apps/                        # 会话层：把编排器接进真实对话
+│   ├── server.py                #   ★ FastAPI：开课 / 发言 / 心跳时钟 / 学情导出
+│   ├── smoke_test.py            #   ★ 课前彩排脚本（不发言跑完一节课）
+│   └── static/index.html        #     学生端页面（对话 + 阶段进度）
+│
+├── frontend/                    # Next.js 学生端；静态构建由 FastAPI 同源托管
+│   ├── src/                     #   页面、课堂阶段与统一 API 适配层
+│   └── out/                     #   npm run build 生成（不入库）
+│
+└── orchestrator/                # 编排器：规范 + 实现 + 演示
+    ├── ORCHESTRATOR.md          #   ★ LangGraph 状态图、节点、条件边、调度约定（权威规范）
+    ├── agent.py                 #   ★ 真实 LangGraph 实现（11 节点，可直接跑）
+    ├── run_demo.py              #   ★ 模拟一节课并打印编排过程
+    ├── demo-run.md              #     上面这个脚本的一次真实运行实录
+    ├── graph_skeleton.py        #     骨架版（只看 LangGraph 怎么写，不跑）
+    ├── HOW-IT-WORKS.md          #     自然语言讲运作过程
+    ├── clock_reference.py       #     真实时钟与切幕判定的参考实现 + 回归测试
+    └── MIGRATION.md             #     从旧仓库迁移的映射与变更记录
 ```
 
-**路由**（hash，刷新与前进后退都能用）
+### 跑起来（真实 LangGraph）
 
-| hash | 页面 |
+```bash
+# 依赖装在隔离 Python 环境里
+pip install -r requirements.txt
+python orchestrator/run_demo.py        # 模拟一节课（讲解 → 复述 → 探究 → 下课）
+```
+
+### 课堂里跑起来（一键）
+
+**双击项目根目录的 `启动课堂.bat`** —— 起服务、自动开浏览器、打印局域网地址，就这样。
+
+### 测试
+
+```powershell
+# 后端接口与阶段状态机
+python -m unittest apps.test_api_integration -v
+
+# 前端代码检查
+npm run lint --prefix frontend
+
+# 构建前端、启动真实后端，并用浏览器走完整课堂流程
+npm run test:e2e --prefix frontend
+```
+
+端到端测试会实际点击课程、开始上课、结束视频、提交复述与深入思考，最后在课堂讨论框
+发送消息，并断言课堂不会错误地跳到结束页。
+
+命令行等价物（可加参数）：
+
+```bash
+python apps/start.py                 # 默认 0.0.0.0:8000，自动开浏览器
+python apps/start.py --scale 12      # 打开的页面带 12 倍速：45 分钟压成约 4 分钟
+python apps/start.py --port 8080     # 换端口
+python apps/start.py --no-browser    # 只起服务
+```
+
+启动后会打印两行地址：**本机上课**（老师自己）和 **手机/学生端**（局域网，让学生连这个）。结束按 `Ctrl+C`。
+
+### 课堂怎么上（三个入口，同一套后端）
+
+一节课的流程：**进教室（待机）→ 老师按「开始上课」→ 播放一整段讲解视频（AI 全程静默，
+时间照常计入课堂）→ 视频全片播完、报告一次 → 复述/深度探究（学生打字答题）→
+老师按「下一环节」一步步走 → 下课导出学情**。
+
+> 讲解阶段的授课方式由 `lesson-plan.json` 里 guided_learning 的 `delivery` 决定：
+> `video`（本课，整段视频替代讲解，AI 不出讲解词，视频再长也不会被时间预算切走）
+> 或 `narration`（默认，AI 逐段讲解，适合没有视频的课）。
+
+| 入口 | 命令 | 给谁用 |
+| --- | --- | --- |
+| 网页 | 浏览器打开 `http://127.0.0.1:8000/` | 老师/学生。页面自带「开始上课 / 视频播完 / 下一环节」三个按钮 |
+| **命令行窗口** | `python apps/cli.py` | 不等前端时直接上课：`/begin` `/video` `/next` 是三个按钮，直接打字是学生发言 |
+| HTTP API | 见 **`apps/API.md`** | 前端同学对接用：全部接口、字段、时序图、curl 示例 |
+
+命令行窗口长这样：
+
+```
+[等待上课·uninitialized] > /begin
+[上课中·讲解阶段] > /video
+[上课中·讲解阶段] > （第 2 段讲解词）
+[上课中·复述阶段] > 高级调度把作业调进内存……
+[上课中·复述阶段] > （AI 反馈 + 星级）
+[上课中·复述阶段] > /next
+```
+
+| 机制 | 说明 |
 | --- | --- |
-| `#` | 我的课程 |
-| `#/course/:courseId` | 该课程已开放的周次 |
-| `#/lesson/:courseId/:lessonId` | 该课时的课堂 / 课后入口 |
-| `#/class/:courseId/:lessonId` | 课堂 |
-| `#/review/:courseId/:lessonId` | 课后 |
+| **三个老师按钮** | `POST /begin`（起课铃）、`POST /media/done`（**整段视频全片播完报一次**：自动切进复述并抛出第一问）、`POST /stage/next`（下一环节：无条件切幕，不受时间/证据门槛限制）。 |
+| **视频讲解模式** | 讲解阶段 AI 全程静默不出讲解词；视频时间照常计入课堂时长；讲解阶段只认「视频播完」或老师按钮，**时间预算不切幕**（视频多长都等它放完）。 |
+| **待机态** | 学生进教室后课**不算开始**：不计时、不发消息（409）、心跳不推进。起课铃响了一切才开始。 |
+| **心跳时钟** | 服务每 10 秒（`AGENT_TICK_SECONDS`）把时钟推一次，只在上课中推进。学生不打字时到点讲下一段、到点抛下一问、到点切幕；**没新内容就静默不开口**。 |
+| **会话持久化** | 状态落在 `runtime/sessions/<sid>.json`，进程重启能续上（上课中的课会把心跳线程接回来）。 |
+| **学情导出** | 课后 `GET /api/session/<sid>/export?fmt=md`（或 `fmt=json`），页面/CLI 的「学情」按钮就是它。 |
 
-演示目录以 2026-09-01 为学期起点计算当前周；此前周次假定已经上过，当前周可学，未来周次隐藏。真实接入时应由后端按学生选课、教师发布和实际授课进度返回 `status: completed | current | upcoming`，不能仅靠日历推断。每个课时使用独立的会话 ID。课堂里没有返回按钮，`Esc` 也禁用 —— 一旦开课就走完四个阶段。
+课前彩排（两种驱动方式各跑一遍）：
+
+```bash
+python apps/smoke_test.py stages           # ★ 用三个按钮走完整节课（不依赖真实时间）
+python apps/smoke_test.py auto --scale 30  # 全程不发言不按钮，看心跳能不能自己上完
+python apps/smoke_test.py chat             # 模拟学生答题，看反馈与判星
+```
+
+> ⚠ **上课前别让电脑休眠。** 时钟是真实的：休眠一晚唤醒后会发现课时一下跳出去，直接走到下课。
+
+### 接真实大模型（可选）
+
+`teach` 节点接任意 OpenAI 兼容端点。**不配也能跑完整节课**，只是老师的话是模板生成的。
+
+```bash
+cp .env.local.example .env.local    # 然后填入你的 Key（该文件已进 .gitignore）
+python orchestrator/llm_probe.py    # 先单独验证端点通不通
+python orchestrator/run_demo.py     # 再跑整节课
+```
+
+也可以直接用环境变量，不用建文件：
+
+```bash
+export AGENT_LLM_BASE_URL=https://api.deepseek.com/v1
+export AGENT_LLM_API_KEY=sk-xxx
+export AGENT_LLM_MODEL=deepseek-chat
+```
+
+> **模型只负责措辞，不负责编排。** `teach` 分两层：确定性骨架决定"讲哪段、问哪题"，
+> 模型把指令润色成自然语言。所以模型挂了课照常上完，切幕与星级一字不差。
+> 已验证：有/无 LLM 两种方式跑同一串时间戳，剔除老师说的话后 **51 行编排结果逐行相同**。
+> 详见 `ORCHESTRATOR.md` 第 3.1 节。
+
+演示输出会标出每轮回复的来源：`老师[AI  ]>` 是模型生成，`老师[脚本]>` 是降级文案。
 
 ---
 
-## 技术说明
+## 五个阶段
 
-**Next.js 负责应用入口、根布局、页面元数据、全局样式和生产构建。** 当前迁移优先保证行为等价：原有课堂编排模块作为客户端兼容层挂载，后续可以按阶段逐步替换成独立 React 组件，而不需要再次改动接口契约。
+| 阶段 | `host_phase` | 时间 | 干什么 | 星级影响 |
+| --- | --- | --- | --- | --- |
+| 开场 | `intro` | — | 交代目标与互动方式 | — |
+| 引导学习 | `guided_learning` | 0-50% | 讲解 + 主动提问 | 1 星（已接触） |
+| 复述与讨论 | `recap_discussion` | 50-70% | 学生复述，AI 补缺口 | 2-3 星 |
+| 深层探究 | `deep_inquiry` | 70-85% | 追问为什么/如何/用在哪/跨学科 | 4 星 |
+| 全班讨论 | `class_discussion` | 85-100% | 老师主导，AI 退居协助 | 只记快照 |
+| 收尾 | `ending` | — | 总结 + 遗留问题 | — |
 
-**课堂主体是 Client Component。** 外部播放器挂载、主题、输入框、局部反馈动画、`localStorage` 与实时会话都依赖浏览器能力；后端接口仍然通过 `src/legacy/api.js` 访问，不在 Next.js 中重复实现业务后端。
-
-**界面切换不依赖动画。** Hash 页面、课堂 Stage、总结编辑/反馈视图都直接更新显隐状态；消息、Toast、悬停等局部反馈动画不参与路由和阶段状态管理。
-
-**主题只有两套规则。** `html[data-theme]` 只取 `light` / `dark`，「跟随系统」由 JS 监听 `matchMedia` 后代写，这样 CSS 不必把深色令牌写两遍。首屏防闪靠 `<head>` 里一段内联脚本在样式表之前定好属性。
-
-## 后端对接
-
-**所有接口目前走 mock。** 改 `src/legacy/api.js` 顶部一行即可切换到真实请求：
-
-```js
-export var USE_MOCK = false;
-```
-
-课程目录预计由 `GET /api/student/courses` 返回：`{ courses: [{ courseId, name, summary, icon, currentWeek, lessons: [{ lessonId, week, chapter, title, summary, status, estimatedMinutes, knowledgePoints }] }] }`。后端应只返回该学生已选课程，并以真实教学进度标记课时。课堂仍通过 `api.js` 获取课时和交互数据；教师端需要服务端密钥的接口不能从浏览器直接调用。
-
-### 视频播放器接入
-
-项目不包含视频文件，也不会创建原生 `<video>`。业务方在进入教学视频阶段前注册播放器：
-
-```js
-window.StudentAgentVideoPlayer = {
-  mount(container, context) {
-    // 使用你们自己的播放器挂载到 container。
-    // context.video 是 GET /api/lesson/video 返回的视频信息。
-    // 播放结束时必须调用 context.onEnded()。
-    const player = createYourPlayer(container, {
-      source: context.video,
-      startSeconds: context.startSeconds,
-      onEnded: context.onEnded,
-      onError: context.onError,
-    });
-
-    // 页面离开或切换课时时会调用此清理函数。
-    return () => player.destroy();
-  },
-};
-```
-
-`context` 还包含当前 `lessonId`。如果播放器脚本在页面初始化后加载，也可以调用 `window.StudentAgentVideoPlayerBridge.register(adapter)` 注册同样的 adapter。
-
-完整的接口契约、请求响应示例、以及后端需要补齐的能力清单，见 **[后端接口说明](docs/api/后端接口说明.md)**。
-
-**想看它运行时一步步发生什么** → [运行时流程](docs/architecture/RUNTIME.md)（24 步）
-**想看架构与模块职责** → [前端架构](docs/architecture/ARCHITECTURE.md)
-**想看 Next.js 启动、路由、课堂阶段与 API 流程图** → [Next.js 学生端前端流程图](docs/architecture/NEXT_FRONTEND_WORKFLOW.md)（Mermaid，可直接在 Markdown 中预览）
+**阶段可自由启停**：`lesson-plan.json` 里 `enabled: false` 即可跳过。
 
 ---
 
-## 已知限制
+## 老师配一门课：三步
 
-- 全部是本地假数据，**没有真实后端联调过**。
-- 课后页面是空占位，接口契约已备好但未实现。
-- 阶段 4 的多人讨论是单人 mock（后端目前 `student_id` 硬编码，无班级/讨论组结构）。
-- 掌握度（0–5 星）在前端还没有展示。
-- 多课程和周次目前是演示数据；视频播放器和视频数据需由业务方接入，未接入时显示挂载占位。
+### 1. 定阶段与时长
+
+编辑 `lesson-data/lesson-plan.json`：
+
+```json
+{
+  "lesson_id": "ch3-process-scheduling",
+  "total_minutes": 45,
+  "stages": [
+    { "id": "guided_learning",  "enabled": true,  "minutes": 22, "advance_when": "either" },
+    { "id": "recap_discussion", "enabled": true,  "minutes": 9,  "advance_when": "either" },
+    { "id": "deep_inquiry",     "enabled": true,  "minutes": 7,  "advance_when": "either" },
+    { "id": "class_discussion", "enabled": false, "minutes": 7,  "advance_when": "budget" }
+  ]
+}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `enabled` | `false` → **整段跳过**（比如这门课不要讨论） |
+| `minutes` | 这一幕的**时长预算** |
+| `advance_when` | `either`（证据达标或时间到）/ `evidence`（学透才走）/ `budget`（只看时间） |
+
+### 1.1 时间怎么算（真实时钟）
+
+编排器**用真实时间**推进，不看"聊了几轮"，也不靠 LLM 估算时长。每轮由会话层把当前时间戳（`now`）注入状态，编排器只做一件事：
+
+```
+stage_elapsed_minutes  = now - stage_started_at     # 本幕已花分钟
+lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
+```
+
+到点（`minutes` 预算耗尽）就切下一幕。**编排器不管学生是否在场** —— 那是老师的事。
+
+```json
+"advance_policy": {
+  "on_budget_exhausted": "wrap_up",       // 预算耗尽：wrap_up 收尾后切 / force_advance 立即切 / extend 允许延长
+  "on_evidence_reached": "advance",       // 证据达标：切幕
+  "min_stage_minutes": 2,                 // 最短幕时长，防止秒切
+  "max_stage_overrun_minutes": 3          // extend 模式下最多超时多少
+}
+```
+
+> 时间戳由会话层注入而非编排器自己取，是为了让切幕逻辑**可单测、可回放**。
+> 参考实现与 11 条回归测试见 `orchestrator/clock_reference.py`。
+
+### 2. 填课程内容
+
+| 要写什么 | 写在哪 | 现状 |
+| --- | --- | --- |
+| 知识点 + 检测问题 + 4 个探究字段 | `rules/KNOWLEDGE-BASE.md` | 探究字段待填 |
+| 老师目标、核心难点（检验问题）、易混淆点 | `runtime/TMISSION.md` | 内容已有 |
+| 本课先修/新内容/任务/成功证据 | `runtime/LESSON-CONTENT.md` | 内容已有 |
+| 每个片段讲什么 | `lesson-data/segments/seg-XXX.json` | 已有 |
+| 各阶段的问题与评判标准 | `stages/<阶段>/questions.md` · `rubric.md` | **暂不填（按需）** |
+
+### 3. 交付给编排器
+
+按 `orchestrator/ORCHESTRATOR.md` 实现状态图。老师侧无需理解节点连法 —— **规则与配置就是燃料**。
+
+---
+
+## 空壳也能跑
+
+**关键约定**：阶段内容可以完全不写，编排器照常运行。
+
+| 缺失 | 降级行为 |
+| --- | --- |
+| `stages/<id>/questions.md` 空 | 改用 `KNOWLEDGE-BASE.md` 的 `检测问题` |
+| `stages/<id>/rubric.md` 空 | 只用 `MASTERY-STAR-RULES.md` 的通用标准 |
+| `stages/<id>/prompt.md` 空 | 用内置默认提示词 |
+| `class_discussion` 无内容 | AI 提示"请老师主导"+ 计时，然后切幕 |
+
+所以**整条链路现在就是可运行的**，只是问法朴素。填上 `stages/` 后质量自然提升，不需要改代码。
+
+---
+
+## 已经移除的功能
+
+| 移除项 | 说明 |
+| --- | --- |
+| **学生标注（class point）** | 标记点、`points/*.json`、`point_review` 幕、「继续」事件、标注接口 |
+| **区分问题** | 该概念废弃。易混淆点只在 `TMISSION.md` 列名称 |
+| 1 星"已标注" | 改为 **"已接触"**（AI 讲过即记，不再依赖标注） |
+| `source: class_point` | 剩余来源：`dialogue` / `assessment` / `manual` |
+| `lecturing` / `segment_summary` 幕 | 被四阶段模型取代 |
+| **n8n 工作流** | 本仓库不再包含 `workflow/` 与 n8n 节点 |
+| `LESSON-INTERACTION.md` | 改名为 `LESSON-CONTENT.md`（旧名与实际内容不符） |
+
+---
+
+## 关键文档
+
+| 文档 | 内容 |
+| --- | --- |
+| `orchestrator/ORCHESTRATOR.md` | **编排器结构**：LangGraph 状态 schema、节点、条件边、文件调度、校验规则 |
+| `orchestrator/MIGRATION.md` | 新旧路径映射与变更记录 |
+| `rules/interaction/MASTERY-STAR-RULES.md` | **0-5 星唯一权威规则** + 阶段快照机制 |
+| `rules/interaction/DIALOGUE-LOG-FORMAT.md` | 会话状态字段（含编排器字段） |
+| `rules/interaction/LESSON-CONTENT-FORMAT.md` | `LESSON-CONTENT` 与 `TMISSION` 的分工 |
+| `stages/*/README.md` | 各阶段在干什么、没配置时怎么降级 |
+
+---
+
+## 已知缺口（待解决）
+
+| 缺口 | 影响 | 优先级 |
+| --- | --- | --- |
+| **对话日志文件仍共享** | 掌握档案已按学生隔离（`runtime/students/<student_id>/`，2026-09-21 起），但 `runtime/DIALOGUE-LOG.md` 与 `data/dialogue.json` 仍是全课共享文件——多人同上时日志内容会混在一起，**不影响判定与星级**，只影响日志可读性 | 中 |
+| **对话记忆窗口有限** | 长课程可能丢上下文 | 高 |
+| **视频位置接口未打通** | `source.position` 是占位符 | 中 |
+| **判星粒度未定** | 各阶段星级的精确判定标准待明确 | 中 |
+| **`class_discussion` 内容为空** | 当前刻意留空，AI 不参与讨论 | 低（设计如此） |
+
+已解决：~~无定时器~~（学生不发消息就无法切幕）—— 心跳时钟见上文「课堂里跑起来」。
