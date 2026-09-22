@@ -309,6 +309,24 @@ lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
 | `rules/interaction/DIALOGUE-LOG-FORMAT.md` | 会话状态字段（含编排器字段） |
 | `rules/interaction/LESSON-CONTENT-FORMAT.md` | `LESSON-CONTENT` 与 `TMISSION` 的分工 |
 | `stages/*/README.md` | 各阶段在干什么、没配置时怎么降级 |
+| `frontend/docs/api/后端接口说明.md` | **学生端接口说明**：统一消息入口、控制与同步接口、课后报告契约 |
+
+---
+
+## 学生端：课后学习报告
+
+课后页展示这节课的学习报告，三块内容：**知识点掌握**（0–5 星 + 状态）、
+**各阶段表现**（阶段名 + 用时 + 目标计数）、**课后建议**（从知识点里挑 `stars <= 2` 的，
+与后端 md 分支的「理解线」一致）。
+
+只呈现学生自己的部分：教师侧的会话标识（`student_id` / `session_id`）、原始证据摘录
+（`stage_snapshots[].evidence`）和编排遥测（`advance_reason`、`assembled_prompt`）都不下发到这一页。
+星级以后端 `rules/interaction/MASTERY-STAR-RULES.md` 为准，前端不自己算一套。
+
+数据来自 `GET /api/session/{sid}/export?fmt=json`（`apps/server.py` 的 `export()`，
+与它自己 `fmt=md` 的「学情报告」是同一份数据）。**响应是裸 JSON，没有 `{ ok }` 信封**，
+与本仓库其它接口不同。契约与对接注意点见
+[学生端接口说明](frontend/docs/api/后端接口说明.md#课后学情报告学生版)。
 
 ---
 
@@ -321,5 +339,8 @@ lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
 | **视频位置接口未打通** | `source.position` 是占位符 | 中 |
 | **判星粒度未定** | 各阶段星级的精确判定标准待明确 | 中 |
 | **`class_discussion` 内容为空** | 当前刻意留空，AI 不参与讨论 | 低（设计如此） |
+| **课后报告只在同源下能跑** | 页面已接真实导出接口（`USE_MOCK` 那套 mock 已随前端重构移除）。生产由 FastAPI 同源托管，正常；但**后端没有 CORS 中间件**，前端跑 `localhost:3000`、后端在 `127.0.0.1:8000` 时请求会被浏览器拦掉。联调前需给 FastAPI 加 `CORSMiddleware`，或让前端走同源代理 | 中 |
+| **报告可能缺少「未接触」的知识点** | 后端只在 `kp_stars` 有条目时才输出知识点，学生完全没碰过的不进数组，于是整个 `knowledge_points` 可能是空的，页面画不出「未检测」那些行。建议后端按课时知识点目录补全，未接触的返回 `stars: 0` | 中 |
+| **后端 `STAR_STATUS` 只定义了 1–4 星** | 缺 0 和 5 两个键，所以一个 5 星知识点会被后端报成 `"status": "未检测"`。前端已按权威规则表本地兜底（不重算星级，只补标签），后端仍应补上这两个键 | 低 |
 
 已解决：~~无定时器~~（学生不发消息就无法切幕）—— 心跳时钟见上文「课堂里跑起来」。

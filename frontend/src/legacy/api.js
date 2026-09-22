@@ -96,6 +96,28 @@ export function fetchSessionMessages(sessionId, since) {
   return request("GET", sessionUrl(sessionId, "/messages?since=" + (since || 0)));
 }
 
-export function fetchLearningReport(sessionId) {
+/* 0–5 星标签。口径取自后端 rules/interaction/MASTERY-STAR-RULES.md，
+   那份文件自称「唯一权威规则，任何页面不得另算一套」——
+   这里不重算星级，只是补一张标签查表：后端决定星级的 STAR_STATUS 缺少
+   0 和 5 两个键，5 星会被它报成「未检测」，所以要拿这张表兜底。 */
+export var STAR_LABELS = {
+  0: "未检测",
+  1: "已接触",
+  2: "初步理解",
+  3: "理解中",
+  4: "接近掌握",
+  5: "已掌握"
+};
+
+/* 后端 md 分支用的「理解线」：星级 <= 2 视为没达标 */
+export var REPORT_WEAK_STARS = 2;
+
+/* 课后学情报告。响应是**裸 JSON，没有 { ok } 信封**（与本文件其它接口不同），
+   别去拆 r.report —— request() 直接返回整个响应对象。
+   sessionId 用后端自己下发的那个（形如 cls-xxxx，来自 startSession），
+   不是 app.js 存在 localStorage 里按课时生成的那个 UUID。
+   报告只在课已结束（status === "ended"）后才有内容。
+   第二个参数 lessonId 只用于调用方语义，后端按会话取课时，不参与请求。 */
+export function fetchLessonReport(sessionId) {
   return request("GET", sessionUrl(sessionId, "/export?fmt=json"));
 }
