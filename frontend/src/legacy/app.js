@@ -16,7 +16,6 @@ import {
   fetchSessionState, fetchSessionMessages
 } from "./api.js";
 import { uiOf, labelOf, isKnown } from "./phases.js";
-import { createThemeSwitch } from "./theme.js";
 import { createStage as createClassStage } from "./stage-class.js";
 import { createView as createReviewView } from "./view-review.js";
 import { createStage as createSummaryStage } from "./stage-summary.js";
@@ -75,9 +74,6 @@ var catalogPromise = null;
 var hostPhase = null;
 var messageCursor = 0;
 var pollTimer = null;
-
-var themeSwitch = null;
-
 
 /* ═══════════════════════════════════════════════════════════
    路由
@@ -242,7 +238,6 @@ function selectLesson(course, item) {
 
 function renderRoute() {
   var route = parseHash();
-  if (themeSwitch) themeSwitch.setVisible(!route.name);
   loadCourses().then(function () {
     if (location.hash.replace(/^#$/, "") !== (route.name ? "#/" + [route.name, route.courseId, route.lessonId].filter(Boolean).map(encodeURIComponent).join("/") : "")) return;
     if (!route.name) { renderCourses(); showView(VIEWS.courses); return; }
@@ -515,8 +510,6 @@ document.addEventListener("keydown", function (e) {
 /* ═══════════════════════════════════════════════════════════
    启动
    ═══════════════════════════════════════════════════════════ */
-
-themeSwitch = createThemeSwitch();
 
 var hubBack = makeNode("button", "back", "← 返回课时列表");
 hubBack.type = "button";

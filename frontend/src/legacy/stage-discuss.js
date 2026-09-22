@@ -1,5 +1,5 @@
 /* 课堂讨论仍使用同一个 AI 会话；当前不是多人聊天室。 */
-import { $, el, scrollToEnd } from "./ui.js";
+import { $, el, scrollToEnd, typingBubble } from "./ui.js";
 import { sendMessage, advanceStage } from "./api.js";
 
 export function createStage(ctx) {
@@ -26,17 +26,33 @@ export function createStage(ctx) {
     scrollToEnd(log);
   }
 
+  /* 讨论区是另一套标记（.dm--host），加载点也得照它的结构拼 */
+  function showTyping() {
+    var row = el("div", "dm dm--host");
+    row.dataset.typing = "1";
+    row.appendChild(el("div", "dm__avatar", "AI"));
+    var body = el("div", "dm__body");
+    body.appendChild(typingBubble("dm__bubble"));
+    row.appendChild(body);
+    log.appendChild(row);
+    scrollToEnd(log);
+    return function hideTyping() { row.remove(); };
+  }
+
   function send(text) {
     if (busy) return;
     busy = true;
     input.disabled = true;
     $("discuss-send").disabled = true;
     renderMessage("me", text);
+    var stopTyping = showTyping();
     sendMessage(ctx.sessionId, text).then(function (res) {
+      stopTyping();
       renderMessage("host", res.message.text);
       ctx.applyServerTurn(res);
       endBtn.hidden = false;
     }).catch(function (err) {
+      stopTyping();
       ctx.toast("发送失败：" + err.message);
     }).finally(function () {
       busy = false;

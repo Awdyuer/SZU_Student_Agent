@@ -1,5 +1,5 @@
 /* 深入思考：题目与反馈均由后端依据当前 host_phase 生成。 */
-import { $, appendChatMessage } from "./ui.js";
+import { $, appendChatMessage, showTyping } from "./ui.js";
 import { sendMessage, advanceStage } from "./api.js";
 
 export function createStage(ctx) {
@@ -23,11 +23,14 @@ export function createStage(ctx) {
     var row = appendChatMessage(log, "me", answer);
     input.value = "";
     updateSubmit();
+    var stopTyping = showTyping(log);
     sendMessage(ctx.sessionId, answer).then(function (res) {
+      stopTyping();
       if (res.message.text) appendChatMessage(log, "ai", res.message.text);
       ctx.applyServerTurn(res);
       if (res.hostPhase === "deep_inquiry") actions.hidden = false;
     }).catch(function (err) {
+      stopTyping();
       row.remove();
       input.value = answer;
       ctx.toast("提交失败：" + err.message);

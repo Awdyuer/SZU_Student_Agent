@@ -53,10 +53,22 @@ export function fetchLessonVideo(lessonId) {
     .then(function (r) { return r.video || null; });
 }
 
+/* 登录后的学生身份（StudentLogin 存进 localStorage）。
+   取不到就沿用旧的兜底值 —— 后端没配名单时登录页本来就会放行。 */
+function currentStudentId() {
+  try {
+    var raw = window.localStorage.getItem("ai-learn.student");
+    var student = raw ? JSON.parse(raw) : null;
+    return student && student.studentId ? student.studentId : "";
+  } catch (error) {
+    return "";
+  }
+}
+
 export function startSession(payload) {
   return request("POST", "/api/session/start", {
     session_id: payload.sessionId,
-    student_id: payload.studentId || "student-001",
+    student_id: payload.studentId || currentStudentId() || "student-001",
     lesson_id: payload.lessonId,
     time_scale: payload.timeScale || 1
   }).then(normalizeTurn);
