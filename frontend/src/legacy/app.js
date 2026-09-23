@@ -597,6 +597,11 @@ function resetClassroom() {
 function openLessonRoute() {
   showView(VIEWS.class);
 
+  /* 返回再进入：丢掉本地的 phase 记忆。applySessionState 里 phase === hostPhase
+     会提前返回，界面就停在离开前的旧面板上（视频模式会卡在空对话页，
+     enterVideo 永远不触发）。界面长什么样每次都听后端的，重新对表。 */
+  hostPhase = null;
+
   /* 先把界面摆出来，跟后端对上的那一刻再按 phase 纠正 */
   setStage(lesson ? currentStage : "idle");
 

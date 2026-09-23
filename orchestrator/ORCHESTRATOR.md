@@ -16,16 +16,16 @@ lesson-plan.json   ──→   runtime/DIALOGUE-LOG.md  ──→  每轮读 →
 （阶段开关+时长）          （host_phase + 耗时）          （切幕/留幕）
 ```
 
-| 概念 | 落在哪里 | 谁维护 |
-| --- | --- | --- |
-| **演哪一幕** | `host_phase` | AI 每轮写回 |
-| **这门课有哪些幕** | `lesson-plan.json` 的 `stages[]` | 老师 |
-| **每幕演多久** | `lesson-plan.json` 的 `minutes` | 老师 |
-| **当前幕演了多久** | `runtime/DIALOGUE-LOG.md` 的 `stage_elapsed_minutes` | AI 每轮更新 |
-| **现在几点** | state 的 `now` | **会话层注入**（编排器不自己取时间） |
-| **幕怎么演** | `stages/<stage_id>/prompt.md` | 设计者（可空壳） |
-| **幕里问什么** | `stages/<stage_id>/questions.md` | 老师（可空壳） |
-| **幕的及格线** | `stages/<stage_id>/rubric.md` | 老师（可空壳） |
+| 概念                     | 落在哪里                                                 | 谁维护                                     |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------------ |
+| **演哪一幕**       | `host_phase`                                           | AI 每轮写回                                |
+| **这门课有哪些幕** | `lesson-plan.json` 的 `stages[]`                     | 老师                                       |
+| **每幕演多久**     | `lesson-plan.json` 的 `minutes`                      | 老师                                       |
+| **当前幕演了多久** | `runtime/DIALOGUE-LOG.md` 的 `stage_elapsed_minutes` | AI 每轮更新                                |
+| **现在几点**       | state 的`now`                                          | **会话层注入**（编排器不自己取时间） |
+| **幕怎么演**       | `stages/<stage_id>/prompt.md`                          | 设计者（可空壳）                           |
+| **幕里问什么**     | `stages/<stage_id>/questions.md`                       | 老师（可空壳）                             |
+| **幕的及格线**     | `stages/<stage_id>/rubric.md`                          | 老师（可空壳）                             |
 
 ---
 
@@ -92,14 +92,14 @@ class ClassroomState(TypedDict):
 
 每个节点 = 一次职责单一的动作。这 10 个节点就是要实现的目标结构。
 
-| # | 节点名 | 职责 | 读什么 | 写什么 |
-| --- | --- | --- | --- | --- |
-| 1 | `load_plan` | 载入并校验课程计划 | `lesson-data/lesson-plan.json` | state: `remaining_stages` / `stage_budget_minutes` / 时钟策略 |
-| 2 | `tick` | **按真实时钟算已花时长** | state 的 `now` / `stage_started_at` | state: `stage_elapsed_minutes` / `lesson_elapsed_minutes` |
-| 3 | `load_context` | 分层装配上下文 | 见第 4 节 | state 不变（组装 prompt） |
-| 4 | `classify_turn` | 判断本轮输入类型 | 学生消息 + `host_phase` | state: `speaker` / 路由标记 |
-| 5 | `host_event` | 处理主持人事件 | 主持人指令 | state: 目标 `host_phase` |
-| 6 | `teach` | 执行本幕教学（**两层结构**，见 3.1） | 骨架 + `stages/<id>/prompt.md` | state: `reply_text` / `turn_evidence` / `current_question` |
+| # | 节点名            | 职责                                       | 读什么                                 | 写什么                                                           |
+| - | ----------------- | ------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------- |
+| 1 | `load_plan`     | 载入并校验课程计划                         | `lesson-data/lesson-plan.json`       | state:`remaining_stages` / `stage_budget_minutes` / 时钟策略 |
+| 2 | `tick`          | **按真实时钟算已花时长**             | state 的`now` / `stage_started_at` | state:`stage_elapsed_minutes` / `lesson_elapsed_minutes`     |
+| 3 | `load_context`  | 分层装配上下文                             | 见第 4 节                              | state 不变（组装 prompt）                                        |
+| 4 | `classify_turn` | 判断本轮输入类型                           | 学生消息 +`host_phase`               | state:`speaker` / 路由标记                                     |
+| 5 | `host_event`    | 处理主持人事件                             | 主持人指令                             | state: 目标`host_phase`                                        |
+| 6 | `teach`         | 执行本幕教学（**两层结构**，见 3.1） | 骨架 +`stages/<id>/prompt.md`        | state:`reply_text` / `turn_evidence` / `current_question`  |
 
 ### 3.1 `teach` 必须是两层：编排骨架 + 表达
 
@@ -119,11 +119,11 @@ class ClassroomState(TypedDict):
 
 由此得到三个必须遵守的约束：
 
-| 约束 | 原因 |
-| --- | --- |
-| 给模型的 `directive` **必须带内容锚点** | 曾只写"往深讲一层"，模型在无范围约束下编出了本课没有的"马尔可夫性质、参数估计" |
-| 传给模型的文案**不能含 KP 编号** | 模型会照着念，学生听到"KP-004"毫无意义。用 `kp_title()` 转中文标题 |
-| 收尾轮的 `directive` 要显式禁止新内容 | 否则模型会在"总结一下"里继续往外扩 |
+| 约束                                           | 原因                                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| 给模型的`directive` **必须带内容锚点** | 曾只写"往深讲一层"，模型在无范围约束下编出了本课没有的"马尔可夫性质、参数估计" |
+| 传给模型的文案**不能含 KP 编号**         | 模型会照着念，学生听到"KP-004"毫无意义。用`kp_title()` 转中文标题            |
+| 收尾轮的`directive` 要显式禁止新内容         | 否则模型会在"总结一下"里继续往外扩                                             |
 
 **验证方式**：分别在有/无 LLM 下跑同一串时间戳，剔除 `reply_text` 后其余输出应**逐行相同**（已验证 51/51 行一致）。
 | 7 | `judge_mastery` | 按 rubric 判星级 | `stages/<id>/rubric.md` + `rules/interaction/MASTERY-STAR-RULES.md` | state: `mastery_updates` |
@@ -139,25 +139,25 @@ class ClassroomState(TypedDict):
 
 这是"不把整门课塞进一轮上下文"的关键。**按 `host_phase` 决定加载哪些层。**
 
-| 层 | 内容 | 何时加载 |
-| --- | --- | --- |
-| **规则层** | `rules/KNOWLEDGE-BASE.md` 目录 + `rules/interaction/MASTERY-STAR-RULES.md` | 每轮 |
-| **计划层** | `lesson-data/lesson-plan.json`（仅当前阶段的配置） | 每轮 |
-| **课堂层** | `runtime/DIALOGUE-LOG.md` + 当前 `segments/seg-XXX.json` + 该段绑定的 KP 全文 | 每轮 |
-| **阶段层** | `stages/<当前阶段>/questions.md` + `prompt.md` + `rubric.md` | 仅当前阶段 |
-| **历史层** | `runtime/data/dialogue-log.json` 的相关片段 | 按需召回 |
-| **档案层** | `mastery-state.json` / `mastery-history.json` | 仅判星级时 |
+| 层               | 内容                                                                              | 何时加载   |
+| ---------------- | --------------------------------------------------------------------------------- | ---------- |
+| **规则层** | `rules/KNOWLEDGE-BASE.md` 目录 + `rules/interaction/MASTERY-STAR-RULES.md`    | 每轮       |
+| **计划层** | `lesson-data/lesson-plan.json`（仅当前阶段的配置）                              | 每轮       |
+| **课堂层** | `runtime/DIALOGUE-LOG.md` + 当前 `segments/seg-XXX.json` + 该段绑定的 KP 全文 | 每轮       |
+| **阶段层** | `stages/<当前阶段>/questions.md` + `prompt.md` + `rubric.md`                | 仅当前阶段 |
+| **历史层** | `runtime/data/dialogue-log.json` 的相关片段                                     | 按需召回   |
+| **档案层** | `mastery-state.json` / `mastery-history.json`                                 | 仅判星级时 |
 
 **按阶段加载的阶段层文件（重要）：**
 
-| `host_phase` | 加载 `stages/` 下的哪个 |
-| --- | --- |
-| `intro` | （无） |
-| `guided_learning` | （无，用 segment 的 `content`） |
-| `recap_discussion` | `stages/recap_discussion/` |
-| `deep_inquiry` | `stages/deep_inquiry/` |
-| `class_discussion` | `stages/class_discussion/` |
-| `ending` | （无） |
+| `host_phase`       | 加载`stages/` 下的哪个         |
+| -------------------- | -------------------------------- |
+| `intro`            | （无）                           |
+| `guided_learning`  | （无，用 segment 的`content`） |
+| `recap_discussion` | `stages/recap_discussion/`     |
+| `deep_inquiry`     | `stages/deep_inquiry/`         |
+| `class_discussion` | `stages/class_discussion/`     |
+| `ending`           | （无）                           |
 
 > 空壳阶段：若 `stages/<id>/` 下文件为空或缺失，`load_context` **不报错**，注入占位提示 `[本阶段内容未配置]`，教学节点按默认行为运行（见第 7 节）。
 
@@ -290,20 +290,20 @@ load_plan ──► tick ──► load_context ──► classify_turn
 
 **这是本设计的关键约定**：阶段内容可以完全不写，编排器照常运行。
 
-| 缺失的东西 | 降级行为 |
-| --- | --- |
-| `stages/<id>/questions.md` 为空 | 复述/探究阶段改用 `rules/KNOWLEDGE-BASE.md` 的 `检测问题` 提问 |
-| `stages/<id>/rubric.md` 为空 | 判星级只用 `MASTERY-STAR-RULES.md` 的通用标准 |
-| `stages/<id>/prompt.md` 为空 | 使用内置默认提示词（见下） |
-| `class_discussion` 无内容 | AI 输出提示"进入全班讨论，请老师主导"，然后按 `minutes` 计时，到点切幕 |
+| 缺失的东西                        | 降级行为                                                                |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `stages/<id>/questions.md` 为空 | 复述/探究阶段改用`rules/KNOWLEDGE-BASE.md` 的 `检测问题` 提问       |
+| `stages/<id>/rubric.md` 为空    | 判星级只用`MASTERY-STAR-RULES.md` 的通用标准                          |
+| `stages/<id>/prompt.md` 为空    | 使用内置默认提示词（见下）                                              |
+| `class_discussion` 无内容       | AI 输出提示"进入全班讨论，请老师主导"，然后按`minutes` 计时，到点切幕 |
 
 **内置默认提示词（各空壳阶段的兜底）：**
 
-| 阶段 | 兜底行为 |
-| --- | --- |
-| `recap_discussion` | "请用你自己的话复述刚才这一段讲了什么"，然后按学生回答追问 1-2 轮 |
-| `deep_inquiry` | 从 KP 的 `为什么/如何` 字段（若有）各取一问；若无，则问"这个知识点能解决什么实际问题" |
-| `class_discussion` | 输出"进入全班讨论，请老师主导"+ 计时 |
+| 阶段                 | 兜底行为                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| `recap_discussion` | "请用你自己的话复述刚才这一段讲了什么"，然后按学生回答追问 1-2 轮                      |
+| `deep_inquiry`     | 从 KP 的`为什么/如何` 字段（若有）各取一问；若无，则问"这个知识点能解决什么实际问题" |
+| `class_discussion` | 输出"进入全班讨论，请老师主导"+ 计时                                                   |
 
 > 所以：**你现在就可以跑通整条链路**，只是复述/探究的问法比较朴素。等你把 `stages/` 里的内容填上，质量自然提升，不需要改任何代码。
 
@@ -319,6 +319,7 @@ load_plan ──► tick ──► load_context ──► classify_turn
 4. `segments[].id` 均能在 `lesson-data/segments/` 找到对应文件
 5. 启用的阶段中，**需要阶段目录的阶段**（`recap_discussion` / `deep_inquiry` / `class_discussion`）其 `stages/<id>/` 目录存在
    > `intro` / `guided_learning` / `ending` **不需要** `stages/` 目录 —— 它们分别由系统、segment 内容、总结逻辑驱动
+   >
 6. `runtime/` 下模板文件齐全（缺失则从 `rules/interaction/*-FORMAT.md` 生成空白模板）
 7. `rules/KNOWLEDGE-BASE.md` 存在（缺失则警告但允许开课，只是不能提问）
 
@@ -332,28 +333,27 @@ load_plan ──► tick ──► load_context ──► classify_turn
 
 > 本仓库**不含 n8n，也不含前端**。以下 11 个节点在 `orchestrator/agent.py` 中**已实现并可运行**，`graph_skeleton.py` 是去掉血肉的骨架版，两者的对照见 `MIGRATION.md`。
 
-| 节点 | 必须实现 | 说明 | 实现位置 |
-| --- | --- | --- | --- |
-| `load_plan` | 是 | 读 `lesson-data/lesson-plan.json` 并做 7 项启动校验 | 已实现 |
-| `tick` | 是 | **真实时钟结算**，唯一读时间的地方；同时是每轮复位点 | 已实现 |
-| `load_context` | 是 | 按 `host_phase` 分层装配上下文 + 组装问题队列 | 已实现 |
-| `classify_turn` | 是 | 判断本轮输入类型 | 已实现 |
-| `host_event` | 是 | 处理开场/收尾等主持事件 | 已实现 |
-| `teach` | 是 | 执行当前阶段的教学（`AGENT_LLM_*` 有则调模型，无则降级脚本） | 已实现 |
-| `judge_mastery` | 是 | 按 rubric 判星级（确定性：证据组匹配） | 已实现 |
-| `judge_advance` | 是 | **编排核心**，决定是否切幕 | 已实现 |
-| `advance_stage` | 是 | 写阶段快照 + 切到下一幕（未关闭目标带入下一幕） | 已实现 |
-| `write_state` | 是 | 落盘 `runtime/**` 与 `runtime/data/**`（追加不覆盖） | 已实现 |
-| `format_reply` | 是 | 组装回复文本与播报标记 | 已实现 |
+| 节点              | 必须实现 | 说明                                                           | 实现位置 |
+| ----------------- | -------- | -------------------------------------------------------------- | -------- |
+| `load_plan`     | 是       | 读`lesson-data/lesson-plan.json` 并做 7 项启动校验           | 已实现   |
+| `tick`          | 是       | **真实时钟结算**，唯一读时间的地方；同时是每轮复位点     | 已实现   |
+| `load_context`  | 是       | 按`host_phase` 分层装配上下文 + 组装问题队列                 | 已实现   |
+| `classify_turn` | 是       | 判断本轮输入类型                                               | 已实现   |
+| `host_event`    | 是       | 处理开场/收尾等主持事件                                        | 已实现   |
+| `teach`         | 是       | 执行当前阶段的教学（`AGENT_LLM_*` 有则调模型，无则降级脚本） | 已实现   |
+| `judge_mastery` | 是       | 按 rubric 判星级（确定性：证据组匹配）                         | 已实现   |
+| `judge_advance` | 是       | **编排核心**，决定是否切幕                               | 已实现   |
+| `advance_stage` | 是       | 写阶段快照 + 切到下一幕（未关闭目标带入下一幕）                | 已实现   |
+| `write_state`   | 是       | 落盘`runtime/**` 与 `runtime/data/**`（追加不覆盖）        | 已实现   |
+| `format_reply`  | 是       | 组装回复文本与播报标记                                         | 已实现   |
 
 **没有的东西（不要实现）**：任何标注相关节点、任何 n8n 节点、任何前端页面。
 
 ### 与规范的实现差异（已确认）
 
-| 规范没写、实现里补的 | 为什么需要 |
-| --- | --- |
+| 规范没写、实现里补的                                                                   | 为什么需要                                                   |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `tick` 兼做每轮复位（清 `turn_evidence` / `mastery_updates` / `target_phase`） | 这些字段跨 checkpoint 持久化，不复位会让上一轮的判定渗进本轮 |
-| `intro` 不参与时长预算，开场一轮后立即切幕 | intro 是系统幕，没有老师配置的分钟数 |
-| 未关闭目标（`unresolved`）带入下一幕 | 复述没答透的难点，探究阶段应优先追问 |
-| 讲解阶段的 `unresolved` = 全部段落 KP | "讲过"不等于"关闭"，快照里才能看出哪些还没证据 |
-
+| `intro` 不参与时长预算，开场一轮后立即切幕                                           | intro 是系统幕，没有老师配置的分钟数                         |
+| 未关闭目标（`unresolved`）带入下一幕                                                 | 复述没答透的难点，探究阶段应优先追问                         |
+| 讲解阶段的`unresolved` = 全部段落 KP                                                 | "讲过"不等于"关闭"，快照里才能看出哪些还没证据               |
