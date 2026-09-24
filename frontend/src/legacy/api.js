@@ -124,6 +124,12 @@ export var STAR_LABELS = {
 /* 后端 md 分支用的「理解线」：星级 <= 2 视为没达标 */
 export var REPORT_WEAK_STARS = 2;
 
+/* 停课。换新会话前要先停掉旧的 —— 不然后端为它复活的心跳线程会一直跑到下课，
+   在后台把学情写进这个学生的档案里。 */
+export function stopSession(sessionId) {
+  return request("DELETE", sessionUrl(sessionId));
+}
+
 /* 课后学情报告。响应是**裸 JSON，没有 { ok } 信封**（与本文件其它接口不同），
    别去拆 r.report —— request() 直接返回整个响应对象。
    sessionId 用后端自己下发的那个（形如 cls-xxxx，来自 startSession），

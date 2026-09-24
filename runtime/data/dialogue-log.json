@@ -1,6 +1,6 @@
 {
-  "student_id": "student-001",
-  "session_id": "test-student-api-integration",
+  "student_id": "stu-123456",
+  "session_id": "3d0e7022-b69c-4e54-9d01-7f03aa158cda",
   "messages": [
     {
       "turn_at": "2026-09-21T13:32:35+08:00",
@@ -185,6 +185,116 @@
       "student_message": "我认为时间片轮转更重视交互任务的响应速度。",
       "reply_text": "进入全班讨论，请老师主导。",
       "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:00:48+08:00",
+      "phase": "recap_discussion",
+      "speaker": "student",
+      "current_question": "外存中的作业变成内存中的就绪进程，分别由哪一级调度完成？",
+      "student_message": "我不知道",
+      "reply_text": "没关系，我们从名字上找线索。三级调度里有一级叫高级调度，它的另一个名字就是作业调度——你猜，负责把外存里的作业调进内存的，会不会就是它？试着说说看。",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:01:29+08:00",
+      "phase": "recap_discussion",
+      "speaker": "student",
+      "current_question": "外存中的作业变成内存中的就绪进程，分别由哪一级调度完成？",
+      "student_message": "那就是作业调度的问题",
+      "reply_text": "对，作业从外存调进内存、变成进程，这一步确实是高级调度，也就是作业调度干的。那接着往下想：进程已经在内存里就绪了，决定它什么时候真正上 CPU 运行的，又是哪一级调度呢？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:34:38+08:00",
+      "phase": "recap_discussion",
+      "speaker": "student",
+      "current_question": "外存中的作业变成内存中的就绪进程，分别由哪一级调度完成？",
+      "student_message": "我不知道",
+      "reply_text": "没关系，我们把范围缩小。三级调度分别叫高级调度、中级调度和低级调度，现在只问一件事：外存里的作业被调进内存，属于这三者中的哪一级？给你个小线索，这一级通常也被叫作“作业调度”，你试着对一下。",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:34:50+08:00",
+      "phase": "recap_discussion",
+      "speaker": "student",
+      "current_question": "外存中的作业变成内存中的就绪进程，分别由哪一级调度完成？",
+      "student_message": "我还是不知道",
+      "reply_text": "没关系，我们把范围再缩小一点。内存里有一堆就绪进程排着队等 CPU，而 CPU 一次只能跑一个，那么“从就绪队列里挑一个送上 CPU”这件事，是三级调度里最靠近 CPU 的最后一步。\n\n你试着说说，这一级叫什么？或者它在三级调度里排第几级？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:35:01+08:00",
+      "phase": "recap_discussion",
+      "speaker": "student",
+      "current_question": "外存中的作业变成内存中的就绪进程，分别由哪一级调度完成？",
+      "student_message": "能再详细一点吗",
+      "reply_text": "好，那我们只把中间一步拆开看。作业本来躺在外存里，它还只是\"作业\"不是\"进程\"，因为它没进内存；高级调度就是负责把它从外存搬进内存、并创建成进程的那道关，就像新生报到注册完才算正式入班。\n\n你先试着说说：高级调度这一步，进来的是什么、出去的时候变成了什么？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:50:57+08:00",
+      "phase": "deep_inquiry",
+      "speaker": "student",
+      "current_question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "student_message": "111",
+      "reply_text": "我看到你敲了\"111\"，是随手试试，还是想表达什么？顺着这个我抛个问题给你：你觉得系统为什么要设计三级调度，而不是只用最底下那一级，谁就绪就让谁上 CPU 就够了？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:51:04+08:00",
+      "phase": "deep_inquiry",
+      "speaker": "student",
+      "current_question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "student_message": "222",
+      "reply_text": "你回了个“222”，我先不猜它指什么。咱们换个具体场景：一个作业还躺在外存上，它想最终跑到 CPU 上执行，你觉得第一道门是由哪一级调度把守的，为什么非得有这么一道门？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:51:10+08:00",
+      "phase": "deep_inquiry",
+      "speaker": "student",
+      "current_question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "student_message": "333",
+      "reply_text": "我看到你打了“333”，不过这个数字我还没能和咱们正在聊的调度对上号，你是在给我什么提示，还是不太确定从哪说起？要不咱们换个更具体的场景：一个还躺在磁盘上的程序，要变成内存里能被 CPU 执行的进程，中间这一步是谁在管？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:51:16+08:00",
+      "phase": "deep_inquiry",
+      "speaker": "student",
+      "current_question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "student_message": "444",
+      "reply_text": "看到你敲了个444，是还在琢磨，还是有点卡住了？没关系，咱们把问题缩小一点:外存里那些还没进内存的作业，要变成内存里能参与调度的进程，这一步是三级调度里的哪一级在管？",
+      "advance_reason": "未达最短幕时长"
+    },
+    {
+      "turn_at": "2026-09-24T16:53:49+08:00",
+      "phase": "deep_inquiry",
+      "speaker": "student",
+      "current_question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "student_message": "000",
+      "reply_text": "你刚才提到“000”，我有点没跟上这个点，能说说你是怎么想到它的吗，或者它和我们现在讨论的调度问题有什么联系？",
+      "advance_reason": "时间与证据均未触发切幕"
+    },
+    {
+      "turn_at": "2026-09-24T16:53:59+08:00",
+      "phase": "deep_inquiry",
+      "speaker": "student",
+      "current_question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "student_message": "无‘",
+      "reply_text": "没想法也正常，可能是我这个问题问得太大了。那我们缩小到具体一点：假设内存已经塞满了进程，这时候又来了一个新作业，你觉得系统会硬把它挤进去，还是会先做点别的动作？你觉得为什么？",
+      "advance_reason": "时间与证据均未触发切幕"
+    }
+  ],
+  "unresolved_question_notes": [
+    {
+      "phase": "deep_inquiry",
+      "kp_id": "KP-002",
+      "question": "这个知识点（三级调度）能解决什么实际问题？结合一个具体场景，说说为什么需要它、它是怎么起作用的。",
+      "attempts": 6,
+      "status": "继续引导中",
+      "note": "对话超过 5 轮，已记录并继续用递进提示引导",
+      "recorded_at": "2026-09-24T16:53:59+08:00"
     }
   ]
 }
