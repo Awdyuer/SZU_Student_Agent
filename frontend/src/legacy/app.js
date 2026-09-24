@@ -13,7 +13,7 @@ import { $, visibleRoot, showToast } from "./ui.js";
 
 import {
   fetchLesson, fetchStudentCourses, startSession,
-  fetchSessionState, fetchSessionMessages
+  fetchSessionState, fetchSessionMessages, stopSession
 } from "./api.js";
 import { uiOf, labelOf, isKnown } from "./phases.js";
 import { createStage as createClassStage } from "./stage-class.js";
@@ -56,9 +56,31 @@ function renewSessionId(lessonId) {
   return saveSessionId(lessonId, createSessionId());
 }
 
+/* 「这一页是刚打开的，还是刷新出来的？」
+
+   用来区分老师关掉命令行窗口重新启动（= 该从头上新课），
+   和学生按了下 F5（= 不该把上到一半的课清掉）。
+
+   **不能靠时间判断**：关窗再启动通常也在两分钟以内，和刷新没差别。
+   sessionStorage 正好是那个中介 —— 它能挺过 F5，但关掉标签页/窗口就没了。 */
+var continuedPageSession = (function () {
+  try {
+    if (window.sessionStorage.getItem("ai-learn.page-open")) return true;
+    window.sessionStorage.setItem("ai-learn.page-open", "1");
+    return false;
+  } catch (e) {
+    // 隐私模式读不到 sessionStorage —— 保守当成刷新，宁可留着课也别误清
+    return true;
+  }
+})();
+
 function shouldRenewSession(state) {
   if (!state || state.status === "ended") return true;
-  if (state.status !== "running" || !state.updated_at) return false;
+  // 没在上课（idle）：不用换，也顺带避开"刚建好的新会话又被换掉"
+  if (state.status !== "running") return false;
+  // 正在上课 + 这一页是新开的窗口 → 新的一节课
+  if (!continuedPageSession) return true;
+  if (!state.updated_at) return false;
   var updated = Date.parse(state.updated_at);
   return Number.isFinite(updated) && Date.now() - updated > 2 * 60 * 1000;
 }
@@ -450,6 +472,9 @@ function openLessonRoute() {
       return startSession({ sessionId: sessionId, lessonId: requestedLessonId });
     }).then(function (state) {
       if (!shouldRenewSession(state)) return state;
+      // 换新会话之前先把旧的停掉：后端为它复活的心跳线程否则会一直跑到下课，
+      // 在后台把这场"没人上的课"的学情写进这个学生的档案。
+      stopSession(sessionId).catch(function () { /* 停不掉也别挡住上课 */ });
       sessionId = renewSessionId(requestedLessonId);
       hostPhase = null;
       messageCursor = 0;

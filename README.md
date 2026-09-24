@@ -32,10 +32,9 @@
 ├── rules/                       # 规则层（AI 每轮只读，老师维护）
 │   ├── KNOWLEDGE-BASE.md        # 知识点目录（含 4 个探究字段）
 │   ├── interaction/             # 课堂节奏规则、判星规则、各文件格式模板
-│   │   ├── SKILL.md             #   课堂互动 Skill（阶段行为）
+│   │   ├── RECAP-GUIDE.md       #   ★ 复述引导：学生状态 → 引导策略（代码每轮读它）
 │   │   ├── MASTERY-STAR-RULES.md   # 0-5 星唯一权威规则
 │   │   └── *-FORMAT.md          #   七个运行时文件的字段模板
-│   └── dialogue/SKILL.md        # 对话 Skill（学生轮次路由）
 │
 ├── lesson-data/                 # 课程数据层（老师配置）
 │   ├── lesson-plan.json         #   ★ 编排入口：阶段开关 + 时长预算 + 推进策略 + 时钟策略
@@ -309,6 +308,7 @@ lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
 | --- | --- |
 | `orchestrator/ORCHESTRATOR.md` | **编排器结构**：LangGraph 状态 schema、节点、条件边、文件调度、校验规则 |
 | `orchestrator/MIGRATION.md` | 新旧路径映射与变更记录 |
+| `rules/interaction/RECAP-GUIDE.md` | **复述引导（状态驱动）**：学生状态 → 策略 → 动作。改它就能改 AI 的复述引导，不用动代码 |
 | `rules/interaction/MASTERY-STAR-RULES.md` | **0-5 星唯一权威规则** + 阶段快照机制 |
 | `rules/interaction/DIALOGUE-LOG-FORMAT.md` | 会话状态字段（含编排器字段） |
 | `rules/interaction/LESSON-CONTENT-FORMAT.md` | `LESSON-CONTENT` 与 `TMISSION` 的分工 |
