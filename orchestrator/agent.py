@@ -163,7 +163,7 @@ def kp_title(kp_id: str, lesson_id: str | None = None) -> str:
 
     上传的课时先查**它自己的**知识点（老师填的 `title`）—— 否则老师传的标题
     全被忽略，下课总结和课后报告里会出现 "KP-901（KP-901，★）" 这种重号。
-    其余情况取自 KNOWLEDGE-BASE.md 的 `## KP-001 调度是什么`。
+    其余情况取自 KNOWLEDGE-BASE.md 的 `## KP-001 示例知识点`。
 
     模型生成的回复要用标题，**不能把 KP-004 这类内部编号说给学生听**。
     取不到时原样返回编号（宁可说编号，也不要编标题）。
@@ -173,6 +173,9 @@ def kp_title(kp_id: str, lesson_id: str | None = None) -> str:
         for kp in (lesson[0].get("knowledge_points") or []) if lesson else []:
             if kp.get("kp_id") == kp_id:
                 return str(kp.get("title") or kp_id)
+        for point in list_lesson_knowledge_points(lesson_id):
+            if point.get("kp_id") == kp_id:
+                return str(point.get("title") or kp_id)
         return kp_id
 
     global _KP_TITLES
@@ -184,31 +187,9 @@ def kp_title(kp_id: str, lesson_id: str | None = None) -> str:
     return _KP_TITLES.get(kp_id, kp_id)
 
 
-EVIDENCE_GROUPS: dict[str, list[list[str]]] = {
-    "KP-001": [["CPU", "一个进程", "只能"], ["调度", "规则", "谁先"]],
-    "KP-002": [
-        ["高级调度", "作业调度", "调入内存", "作业调入"],
-        ["低级调度", "进程调度", "就绪", "上 CPU", "上CPU"],
-        ["中级调度", "对换", "内存平衡"],
-    ],
-    "KP-003": [
-        ["周转", "提交", "完成"],
-        ["等待时间", "就绪队列"],
-        ["响应时间", "首次", "第一次"],
-    ],
-    "KP-004": [
-        ["饥饿", "长作业", "等很久"],
-        ["HRRN", "响应比", "动态优先级", "等待时间加"],
-    ],
-    "KP-005": [
-        ["打断", "中断", "抢占"],
-        ["时间片", "优先级", "更短", "耗尽"],
-    ],
-    "KP-006": [
-        ["时间片", "轮转", "RR"],
-        ["多级反馈队列", "队列间", "移动"],
-    ],
-}
+# 旧版课时曾在这里写死关键词。旧课程内容移除后保持空表；
+# 未配置证据时匹配结果为空，避免误用其它课程的答案。
+EVIDENCE_GROUPS: dict[str, list[list[str]]] = {}
 
 
 def match_evidence(kp_id: str, text: str) -> tuple[int, int]:
@@ -236,21 +217,35 @@ def _strip_code_fences(text: str) -> str:
     return re.sub(r"```.*?```", "", text, flags=re.S)
 
 
-def _parse_stage_questions(phase: str) -> list[dict]:
-    """第 1 级：stages/<phase>/questions.md 里老师填的问题（剥掉代码块示例）。"""
-    text = _read(f"stages/{phase}/questions.md")
+def _stage_questions_path(phase: str, lesson_id: str | None = None) -> str:
+    """课时专属问题优先，找不到时兼容全局空壳阶段目录。"""
+    if lesson_id:
+        lesson_path = ROOT / "stages" / lesson_id / phase / "questions.md"
+        if lesson_path.is_file():
+            return str(lesson_path.relative_to(ROOT)).replace("\\", "/")
+    return f"stages/{phase}/questions.md"
+
+
+def _parse_stage_questions(phase: str, lesson_id: str | None = None) -> list[dict]:
+    """读取当前阶段问题；课时专属文件优先于全局模板。"""
+    path = _stage_questions_path(phase, lesson_id)
+    text = _read(path)
     if not text:
         return []
     body = _strip_code_fences(text)
     out: list[dict] = []
     for block in re.split(r"^## 问题", body, flags=re.M)[1:]:
         m_kp = re.search(r"关联[:：]\s*(KP-\d+|seg-\d+)", block)
+        m_title = re.search(r"知识点[:：]\s*(.+)", block)
         m_q = re.search(r"问题[:：]\s*(.+)", block)
         if m_kp and m_q:
             out.append({
                 "kp_id": m_kp.group(1),
+                "knowledge_point": (
+                    m_title.group(1).strip() if m_title else m_kp.group(1)
+                ),
                 "question": m_q.group(1).strip(),
-                "source": "stages/questions.md",
+                "source": path,
             })
     return out
 
@@ -301,10 +296,15 @@ def _parse_kb_questions() -> list[dict]:
 def _lesson_question_bank(phase: str, lesson_id: str | None) -> list[dict]:
     """上传课时的题库：复述用「检测问题」，探究用四个探究字段。
 
-    只在课时是 store 版（lesson-data/lessons/*.json）时产出。
+    只在课时是 store 版（lesson-data/lesson-plan/*.json）时产出。
     """
     if not lesson_id or not is_uploaded_lesson(lesson_id):
         return []
+    stage_questions = _parse_stage_questions(phase, lesson_id)
+    if stage_questions:
+        return stage_questions
+
+    # 兼容旧上传格式：没有课时专属 stages 时，仍允许使用课时 JSON 中的知识点。
     lesson = load_lesson(lesson_id)
     if not lesson:
         return []
@@ -348,6 +348,34 @@ def _lesson_question_bank(phase: str, lesson_id: str | None) -> list[dict]:
     return out
 
 
+def list_lesson_knowledge_points(lesson_id: str | None) -> list[dict]:
+    """从课时专属问题文件汇总知识点，供目录、标题和报告使用。"""
+    if not lesson_id:
+        return []
+    if not is_uploaded_lesson(lesson_id):
+        lesson = load_lesson(lesson_id)
+        return list((lesson[0].get("knowledge_points") or []) if lesson else [])
+
+    points: list[dict] = []
+    seen: set[str] = set()
+    for phase in ("recap_discussion", "deep_inquiry"):
+        for question in _parse_stage_questions(phase, lesson_id):
+            kp_id = str(question.get("kp_id") or "").strip()
+            if not kp_id or kp_id in seen:
+                continue
+            seen.add(kp_id)
+            points.append({
+                "kp_id": kp_id,
+                "title": question.get("knowledge_point") or kp_id,
+                "检测问题": question.get("question") or "",
+            })
+    if points:
+        return points
+
+    lesson = load_lesson(lesson_id)
+    return list((lesson[0].get("knowledge_points") or []) if lesson else [])
+
+
 def build_question_queue(
     phase: str, unresolved: list[str], lesson_id: str | None = None
 ) -> list[dict]:
@@ -363,7 +391,7 @@ def build_question_queue(
         return _lesson_question_bank(phase, lesson_id)
 
     if phase == "recap_discussion":
-        q = _parse_stage_questions("recap_discussion")
+        q = _parse_stage_questions("recap_discussion", lesson_id)
         if q:
             return q
         q = _parse_tmission_questions()
@@ -372,7 +400,7 @@ def build_question_queue(
         return _parse_kb_questions()
 
     if phase == "deep_inquiry":
-        q = _parse_stage_questions("deep_inquiry")
+        q = _parse_stage_questions("deep_inquiry", lesson_id)
         if q:
             return q
         # 探究字段（为什么/如何/用在哪）为空 → 降级为通用探究问题。
@@ -475,6 +503,7 @@ class ClassroomState(TypedDict):
     student_message: str
     speaker: Literal["host", "student"]
     student_status: Literal["active", "practicing", "waiting", "ended"]
+    dialogue_history: list[dict]     # 当前会话的完整学生/AI消息，供理解和判断使用
 
     # ── 证据与掌握 ──
     turn_evidence: list[str]
@@ -501,15 +530,16 @@ class ClassroomState(TypedDict):
 # 课时库：老师上传的课时定义 + 旧版单课时文件
 #
 # 两个来源，一套解析：
-#   · 新式 —— lesson-data/lessons/<lesson_id>.json，一份文件装下元数据、
-#     stages、segments、知识点，由 POST /api/teacher/lesson 写入；
+#   · 新式 —— lesson-data/lesson-plan/<lesson_id>.json，一份文件装下元数据、
+#     stages、segments，由 POST /api/teacher/lesson 写入；
 #   · 旧式 —— lesson-data/lesson-plan.json + lesson-data/segments/*.json，
 #     只有一节课，刻意保持原样不动。
 # ═══════════════════════════════════════════════════════════════
 
-LESSONS_DIR = ROOT / "lesson-data" / "lessons"
+LESSONS_DIR = ROOT / "lesson-data" / "lesson-plan"
 LEGACY_PLAN_PATH = ROOT / "lesson-data" / "lesson-plan.json"
 SEGMENTS_DIR = ROOT / "lesson-data" / "segments"
+TRANSCRIPTS_DIR = ROOT / "lesson-data" / "transcripts"
 
 # lesson_id 会被拼进文件名，必须白名单。只放行字母数字和 . _ -，
 # 且首字符是字母数字 —— 拦住 ../、绝对路径、盘符，以及 Windows 保留名
@@ -617,13 +647,13 @@ def save_lesson(doc: dict) -> str:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, path)
-    return f"lesson-data/lessons/{lesson_id}.json"
+    return f"lesson-data/lesson-plan/{lesson_id}.json"
 
 
 def lesson_source_label(lesson_id: str) -> str:
     """给接口返回用：这节课的定义存在哪。"""
     if is_uploaded_lesson(lesson_id):
-        return f"lesson-data/lessons/{lesson_id}.json"
+        return f"lesson-data/lesson-plan/{lesson_id}.json"
     if (plan := _legacy_plan()) and plan.get("lesson_id") == lesson_id:
         return "lesson-data/lesson-plan.json（旧版单课时）"
     return "未找到"
@@ -662,6 +692,20 @@ def lesson_knowledge_block(lesson_id: str) -> str:
     if not points:
         return ""
     return "\n\n".join(format_knowledge_point(kp) for kp in points)
+
+
+def lesson_transcript_block(lesson_id: str) -> str:
+    """读取一节完整的字幕稿，供教学和掌握判断共享。"""
+    if not lesson_id:
+        return ""
+    try:
+        safe_lesson_id(lesson_id)
+    except ValueError:
+        return ""
+    path = TRANSCRIPTS_DIR / f"{lesson_id}.md"
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
 
 
 def load_plan(state: ClassroomState) -> dict:
@@ -751,7 +795,9 @@ def validate_plan(plan: dict, *, uploaded: bool = False) -> list[str]:
         if s.get("advance_when") not in ("either", "evidence", "budget"):
             problems.append(f"阶段 {stage_id} 的 advance_when 非法")
         if stage_id in ("recap_discussion", "deep_inquiry", "class_discussion"):
-            if not (ROOT / "stages" / stage_id).is_dir():
+            lesson_stage_dir = ROOT / "stages" / str(plan.get("lesson_id")) / stage_id
+            generic_stage_dir = ROOT / "stages" / stage_id
+            if not lesson_stage_dir.is_dir() and not generic_stage_dir.is_dir():
                 problems.append(f"启用阶段 {stage_id} 缺 stages/ 目录")
     # advance_policy 的四个键在开课时被 load_plan 直接下标取用，
     # 少一个就是开课 KeyError —— 所以校验必须把它拦在写盘之前。
@@ -855,12 +901,11 @@ def load_context(state: ClassroomState) -> dict:
     # 模型在讲解课上编出无关概念的记录，见下面 anchor 那段注释）。
     if not is_uploaded_lesson(state.get("lesson_id") or ""):
         parts.append("[知识库]\n" + _read("rules/KNOWLEDGE-BASE.md"))
-    # 课时层：老师经 POST /api/teacher/lesson 传入的知识点。
-    # 每轮从磁盘读而不是塞进 session state —— session state 会被
-    # `s["state"] = st` 整体替换，挂在外面的字段容易丢；而且 load_context
-    # 本来每轮就 _read 一遍，行为一致。旧式课时没有这段，返回空串。
+    # 旧式课时仍保留 JSON 知识点；新式课时以完整字幕为内容依据。
     if kp_block := lesson_knowledge_block(state.get("lesson_id") or ""):
         parts.append("[本课知识点]\n" + kp_block)
+    if transcript := lesson_transcript_block(state.get("lesson_id") or ""):
+        parts.append("[完整字幕稿]\n" + transcript)
     # 计划层（仅当前阶段配置）
     plan = state.get("lesson_plan") or {}
     for s in plan.get("stages", []):
@@ -873,9 +918,23 @@ def load_context(state: ClassroomState) -> dict:
             parts.append("[当前段落]\n" + seg_text)
     # 阶段层（只有复述/探究/讨论三幕有；空壳 → 占位提示）
     if phase in ("recap_discussion", "deep_inquiry", "class_discussion"):
-        for f in ("questions.md", "prompt.md", "rubric.md"):
-            text = _read(f"stages/{phase}/{f}")
+        for f in ("questions.md", "prompt.md"):
+            lesson_path = ROOT / "stages" / str(state.get("lesson_id") or "") / phase / f
+            generic_path = ROOT / "stages" / phase / f
+            path = (
+                lesson_path if lesson_path.is_file()
+                else generic_path
+            )
+            text = path.read_text(encoding="utf-8") if path.is_file() else ""
             parts.append(f"[{f}]\n" + (text.strip() or "[本阶段内容未配置]"))
+    # 历史层：当前会话已经发生的学生/AI消息，供语义理解和追问使用。
+    history = state.get("dialogue_history") or []
+    if history:
+        lines = []
+        for item in history:
+            role = "学生" if item.get("role") == "student" else "AI"
+            lines.append(f"{role}：{item.get('text', '')}")
+        parts.append("[对话历史]\n" + "\n".join(lines))
     # 档案层
     parts.append("[掌握档案]\n" + json.dumps(state.get("kp_stars", {}), ensure_ascii=False))
 
@@ -1142,9 +1201,8 @@ def teach(state: ClassroomState) -> dict:
             if wrap:
                 speak = True          # 本幕时间到，收个尾（说完就切幕）
             plain = wrap_line + "很好，我们接着往下讲。"
-            # ⚠️ directive 必须带内容锚点。曾经这里只写"往深讲一层"，
-            #    模型没有任何范围约束，直接编出了"马尔可夫性质、参数估计"
-            #    （本课是处理机调度）—— 幻觉。锚点是防这个的。
+            # ⚠️ directive 必须带内容锚点。只写“往深讲一层”会让模型
+            #    脱离当前段落自由发挥，因此必须绑定本节课的实际内容。
             if wrap:
                 titles = "、".join(f"《{t}》" for t in _segment_titles(plan))
                 directive = (
@@ -1304,26 +1362,37 @@ def teach(state: ClassroomState) -> dict:
 
 
 def _hint(kp_id: str) -> str:
-    hints = {
-        "KP-002": "想一想：作业是谁调进内存的？变成进程之后，又是谁决定它上 CPU？",
-        "KP-003": "三个指标各有一个起点和一个终点，注意区分“第一次拿到 CPU”和“做完”。",
-        "KP-004": "如果一直有短作业进来，长作业会怎样？HRRN 的响应比是怎么算的？",
-        "KP-005": "关键是“正在运行的进程会不会被打断”，想想什么事件会触发打断。",
-        "KP-006": "RR 拿什么换响应速度？多级反馈队列为什么不用预先知道进程长度？",
-    }
-    return hints.get(kp_id, "再从定义出发想一想。")
+    return "再从当前知识点的定义和用途出发想一想。"
+
+
+def _parse_json_object(text: str) -> dict | None:
+    """从模型输出中提取第一个 JSON 对象。"""
+    raw = (text or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, dict) else None
+    except json.JSONDecodeError:
+        pass
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        value = json.loads(raw[start:end + 1])
+        return value if isinstance(value, dict) else None
+    except json.JSONDecodeError:
+        return None
 
 
 def judge_mastery(state: ClassroomState) -> dict:
-    """按 MASTERY-STAR-RULES.md 判星级（确定性）。
-
-    - guided_learning：讲过即记 1 星（已接触）
-    - recap_discussion：零散要点 2 星 / 完整复述 3 星
-    - deep_inquiry：说出机制 4 星
-    - 星级只升不降；证据来自学生话语的关键词组匹配。
-    """
+    """让模型结合当前会话历史、知识点和字幕判断掌握度。"""
     phase = state.get("host_phase")
     msg = state.get("student_message", "")
+    if phase not in ("recap_discussion", "deep_inquiry") or not msg.strip():
+        return {}
+
     kp_stars = dict(state.get("kp_stars") or {})
     kp_meta = dict(state.get("kp_meta") or {})
     updates: list[dict] = []
@@ -1331,49 +1400,99 @@ def judge_mastery(state: ClassroomState) -> dict:
     mastered = list(state.get("mastered") or [])
     unresolved = list(state.get("unresolved") or [])
     now = state.get("now")
+    pending = state.get("pending_question") or {}
+    kp = state.get("current_target") or pending.get("kp_id")
+    if not kp:
+        return {}
 
-    def bump(kp: str, new_stars: int, source: str, ev: str) -> None:
-        old = kp_stars.get(kp, 0)
-        if new_stars > old:
-            kp_stars[kp] = new_stars
-            updates.append({
-                "kp_id": kp, "old_stars": old, "new_stars": new_stars,
-                "old_status": STAR_STATUS.get(old, "未检测"),
-                "new_status": STAR_STATUS[new_stars],
-                "source": source, "stage": phase, "evidence": ev,
-                "occurred_at": now,
-            })
-            kp_meta[kp] = {
-                "last_source": source, "last_stage": phase,
-                "last_evidence": ev, "updated_at": now,
-            }
+    if not llm_available():
+        return {
+            "mastery_updates": [],
+            "turn_evidence": [],
+            "kp_stars": kp_stars,
+            "kp_meta": kp_meta,
+            "mastered": mastered,
+            "unresolved": unresolved,
+        }
 
-    if phase == "guided_learning":
-        seg_id = state.get("active_segment_id")
-        if seg_id:
-            seg = _segment_detail(state.get("lesson_plan") or {}, seg_id)
-            if seg:
-                for kp in seg.get("knowledge_point_ids", []):
-                    bump(kp, 1, "dialogue", f"讲解阶段讲过（{seg.get('title', '')}）")
+    question = pending.get("question") or state.get("current_question") or ""
+    kp_name = pending.get("knowledge_point") or kp_title(kp, state.get("lesson_id"))
+    transcript = lesson_transcript_block(state.get("lesson_id") or "")
+    history = state.get("dialogue_history") or []
+    history_text = "\n".join(
+        f"{'学生' if item.get('role') == 'student' else 'AI'}：{item.get('text', '')}"
+        for item in history
+    ) or "（尚无历史对话）"
 
-    elif phase in ("recap_discussion", "deep_inquiry"):
-        kp = state.get("current_target")
-        if kp:
-            hits, total = match_evidence(kp, msg)
-            if total:
-                if phase == "recap_discussion":
-                    new_stars = 3 if hits == total else (2 if hits > 0 else 0)
-                else:
-                    new_stars = 4 if hits == total else 0
-                if new_stars:
-                    ev = f"学生原话：「{msg[:60]}」"
-                    bump(kp, new_stars, "dialogue", ev)
-                    evidence.append(f"{kp}: 命中 {hits}/{total} 组证据")
-                    if hits == total:
-                        if kp in unresolved:
-                            unresolved.remove(kp)
-                        if kp not in mastered:
-                            mastered.append(kp)
+    system = (
+        "你是课堂掌握度评估器，只输出一个 JSON 对象，不输出寒暄或 Markdown。"
+        "你必须结合课程字幕、当前知识点和完整对话历史判断学生是否真正理解。"
+        "不能因为学生自称掌握就升级；只能依据学生实际说出的内容。"
+        "星级范围 0-4，5 星只属于正式考核，课堂内不得给出。"
+    )
+    user = f"""课程完整字幕：
+{transcript or "（本课未提供字幕）"}
+
+当前知识点：{kp} {kp_name}
+当前检测问题：{question or "（无）"}
+学生已有星级：{kp_stars.get(kp, 0)}
+
+当前会话历史：
+{history_text}
+
+学生本轮回答：
+{msg}
+
+请判断该学生对当前知识点的星级。只返回：
+{{
+  "kp_id": "{kp}",
+  "new_stars": 0,
+  "evidence": "引用或概括学生回答中支持判断的内容",
+  "mastered": false,
+  "reason": "简短判断理由"
+}}
+"""
+    raw = llm_chat(system, user)
+    result = _parse_json_object(raw or "")
+    if not result:
+        return {
+            "mastery_updates": [],
+            "turn_evidence": [],
+            "kp_stars": kp_stars,
+            "kp_meta": kp_meta,
+            "mastered": mastered,
+            "unresolved": unresolved,
+        }
+
+    try:
+        new_stars = max(0, min(4, int(result.get("new_stars", 0))))
+    except (TypeError, ValueError):
+        new_stars = 0
+    old = kp_stars.get(kp, 0)
+    ev = str(result.get("evidence") or result.get("reason") or "").strip()
+    is_mastered = bool(result.get("mastered"))
+    if ev:
+        evidence.append(f"{kp_name}：{ev}")
+
+    if new_stars > old:
+        kp_stars[kp] = new_stars
+        updates.append({
+            "kp_id": kp, "old_stars": old, "new_stars": new_stars,
+            "old_status": STAR_STATUS.get(old, "未检测"),
+            "new_status": STAR_STATUS.get(new_stars, "未检测"),
+            "source": "llm_history", "stage": phase, "evidence": ev,
+            "occurred_at": now,
+        })
+        kp_meta[kp] = {
+            "last_source": "llm_history", "last_stage": phase,
+            "last_evidence": ev, "updated_at": now,
+        }
+
+    if is_mastered:
+        if kp in unresolved:
+            unresolved.remove(kp)
+        if kp not in mastered:
+            mastered.append(kp)
 
     return {
         "mastery_updates": updates,
@@ -1657,7 +1776,10 @@ def _write_dialogue_log(state: ClassroomState) -> None:
 
 def _append_dialogue_json(state: ClassroomState) -> None:
     path = ROOT / "runtime/data/dialogue-log.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {"student_id": "", "session_id": "", "messages": []}
     data["student_id"] = state.get("student_id")
     data["session_id"] = state.get("session_id")
     data["messages"].append({
@@ -1814,7 +1936,7 @@ def build_graph(checkpointer=None):
 # ═══════════════════════════════════════════════════════════════
 
 def initial_state(session_id: str, student_id: str = "student-001",
-                  lesson_id: str = "ch3-process-scheduling") -> dict:
+                  lesson_id: str = "") -> dict:
     """新会话的首轮要传完整初始 state（后续轮从 checkpoint 恢复）。"""
     return {
         "session_id": session_id,
@@ -1853,6 +1975,7 @@ def initial_state(session_id: str, student_id: str = "student-001",
         "student_message": "",
         "speaker": "student",
         "student_status": "waiting",
+        "dialogue_history": [],
         "turn_evidence": [],
         "mastery_updates": [],
         "kp_stars": {},

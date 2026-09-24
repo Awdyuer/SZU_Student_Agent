@@ -1,10 +1,10 @@
 """课前彩排：不改任何教学代码，只驱动 HTTP 会话接口。
 
-四种用法（前提：服务已启动 `python apps/start.py`）：
+四种用法（前提：服务已启动 `python apps/start.py`，且已上传目标课时）：
 
-    python apps/smoke_test.py auto --scale 30   # 全程不发言，看时钟能不能把课上完
-    python apps/smoke_test.py stages            # ★ 老师的三个按钮走一遍完整流程
-    python apps/smoke_test.py chat              # 模拟学生答题，看反馈与判星
+    python apps/smoke_test.py auto --lesson LESSON_ID --scale 30
+    python apps/smoke_test.py stages --lesson LESSON_ID
+    python apps/smoke_test.py chat --lesson LESSON_ID
     python apps/smoke_test.py export --session X
 
 `stages` 是这次最该跑的一次检查：开始上课 → 视频播完 → 复述 → 下一环节 →
@@ -20,6 +20,7 @@ import time
 import urllib.request
 
 HOST = "http://127.0.0.1:8000"
+LESSON_ID = ""
 
 # 本地服务不走系统代理：挂着 HTTP_PROXY 的机器上 urllib 会被代理拦下报 422
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -48,7 +49,11 @@ def show(messages: list[dict]) -> None:
 
 def open_session(sid: str, scale: float = 1.0) -> dict:
     """进教室。**不自动上课** —— 起课铃是单独的一步。"""
-    st = call("/api/session/start", {"session_id": sid, "time_scale": scale})
+    st = call("/api/session/start", {
+        "session_id": sid,
+        "lesson_id": LESSON_ID,
+        "time_scale": scale,
+    })
     assert st["status"] == "idle", f"刚建好应该处于待机，实际 {st['status']}"
     return st
 
@@ -87,12 +92,9 @@ def cmd_auto(sid: str, scale: float, tick: float) -> int:
 
 
 ANSWERS = [
-    "CPU 一次只能跑一个进程，所以要靠调度规则决定谁先用、用多久。",
-    "高级调度把作业从外存调入内存变成进程，低级调度从就绪队列挑一个上 CPU，"
-    "中级调度负责把暂时不跑的进程换出去。",
-    "周转时间是从作业提交到完成，带权周转时间是周转时间除以运行时间，"
-    "响应时间是第一次拿到 CPU 的时间。",
-    "非剥夺式只有进程主动放弃 CPU 才切换，剥夺式可以按优先级或时间片把正在跑的进程打断。",
+    "我先用自己的话说明这个概念的核心含义。",
+    "我再补充它的用途，以及它为什么会被设计出来。",
+    "如果换成另一个具体场景，我会重点比较条件和结果的变化。",
 ]
 
 
@@ -167,10 +169,11 @@ def cmd_export(sid: str) -> int:
 
 
 def main() -> int:
-    global HOST
+    global HOST, LESSON_ID
     p = argparse.ArgumentParser(description="课前彩排")
     p.add_argument("mode", choices=["auto", "stages", "chat", "export"])
     p.add_argument("--host", default=HOST)
+    p.add_argument("--lesson", default="", help="已上传课时的 lesson_id")
     p.add_argument("--session", default=None)
     p.add_argument("--scale", type=float, default=30.0,
                    help="auto 模式的时间倍速，30 = 45 分钟压缩到约 90 秒")
@@ -178,6 +181,10 @@ def main() -> int:
     a = p.parse_args()
 
     HOST = a.host.rstrip("/")
+    LESSON_ID = a.lesson.strip()
+    if a.mode != "export" and not LESSON_ID:
+        print("缺少 --lesson：请传入已上传课时的 lesson_id", file=sys.stderr)
+        return 2
     sid = a.session or f"{a.mode}-{int(time.time()) % 100000}"
 
     try:

@@ -3,7 +3,7 @@
     <Box style={{ width: 8, height: 40, background: '#1B4F9C', borderRadius: 2, marginTop: 4 }} />
     <Box>
       <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#0F2E5C' }}>一节课的六幕：时间表就是剧本</Text>
-      <Text style={{ fontSize: 15, color: '#64748B', marginTop: 6 }}>以 45 分钟示例课《第3章 处理机调度》为例 —— 时长占比来自 lesson-plan.json 真实配置</Text>
+      <Text style={{ fontSize: 15, color: '#64748B', marginTop: 6 }}>以 45 分钟示例课为例 —— 时长占比来自课时定义中的真实配置</Text>
     </Box>
   </Box>
   <Box style={{ position: 'absolute', top: 128, left: 64, right: 64 }}>

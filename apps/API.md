@@ -117,7 +117,7 @@ curl -X POST http://127.0.0.1:8000/api/session/class-1/stage/next
 ```bash
 curl -X POST http://127.0.0.1:8000/api/session/class-1/message \
   -H "Content-Type: application/json" \
-  -d '{"text": "高级调度把作业调进内存，低级调度决定谁上 CPU"}'
+  -d '{"text": "我先用自己的话说明这个知识点的核心含义。"}'
 ```
 
 返回：`{"reply_text"（AI 的反馈）, "phase", "phase_name", "status", "available_actions"}`
@@ -197,15 +197,15 @@ curl -X POST http://127.0.0.1:8000/api/teacher/lesson \
 ```
 
 一次传完整的一节课：元数据 + `stages` + `segments` + `knowledge_points`。
-落盘成 `lesson-data/lessons/<lesson_id>.json`，之后这节课就能像原来那节一样
+落盘成 `lesson-data/lesson-plan/<lesson_id>.json`，之后这节课就能像原来那节一样
 出现在选课目录、能开课、能看课后报告。
 
 ```json
 {
-  "lesson_id": "ch4-deadlock",
-  "lesson_title": "第4章 死锁",
-  "course_id": "operating-systems",
-  "course": "操作系统",
+  "lesson_id": "example-week-4",
+  "lesson_title": "第4周 示例课时",
+  "course_id": "example-course",
+  "course": "示例课程",
   "chapter": "第 4 周",
   "week": 4,
   "total_minutes": 45,
@@ -215,13 +215,13 @@ curl -X POST http://127.0.0.1:8000/api/teacher/lesson \
     {"id": "deep_inquiry",     "enabled": true, "minutes": 10, "advance_when": "either"}
   ],
   "knowledge_points": [
-    {"kp_id": "KP-401", "title": "死锁的定义",
+    {"kp_id": "KP-401", "title": "示例知识点",
      "定义": "……", "检测问题": "……", "掌握表现": "……",
      "为什么这样设计": "", "如何实现": "", "解决什么实际问题": "", "关联学科": ""}
   ],
   "segments": [
     {"id": "seg-401", "minutes": 20, "order": 1, "title": "……",
-     "knowledge_point_ids": ["KP-401"], "knowledge_points": ["死锁"],
+     "knowledge_point_ids": ["KP-401"], "knowledge_points": ["示例知识点"],
      "summary": "……", "content": "……"}
   ]
 }
@@ -234,7 +234,7 @@ curl -X POST http://127.0.0.1:8000/api/teacher/lesson \
 回读确认存进去了什么：
 
 ```bash
-curl http://127.0.0.1:8000/api/teacher/lesson/ch4-deadlock
+curl http://127.0.0.1:8000/api/teacher/lesson/example-week-4
 ```
 
 返回 `{ok, lesson, source, problems}`；`problems` 非空表示这份定义开课时会失败。
@@ -250,10 +250,8 @@ curl http://127.0.0.1:8000/api/teacher/lesson/ch4-deadlock
 2. **改完要新建会话才生效**。会话在 `/begin` 那一刻把课时定义冻进状态
    （老师不该在上课中途被抽掉进度），响应里的 `staleSessions` 会列出受影响的
    在跑会话。但老师传的**知识点正文**是每轮重读的，改错别字下一次心跳就生效。
-3. **可以覆盖内置课时**。`ch3-process-scheduling` 是仓库自带的，走
-   `lesson-data/lesson-plan.json`。用同一个 id 上传会生成
-   `lesson-data/lessons/ch3-process-scheduling.json`，它**优先于**内置那份；
-   删掉这个文件就恢复原样，内置文件本身全程不被改写。
+3. **同一个 `lesson_id` 重复上传会覆盖旧版本**。覆盖只影响之后新建的会话，
+   正在进行的课堂继续使用开始时的课时快照。
 
 老师传的知识点会进模型的备课材料（`assembled_prompt` 的 `[本课知识点]`），
 但**讲什么、问什么仍由编排骨架决定**，模型只负责把话说准。

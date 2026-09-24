@@ -14,7 +14,7 @@
         fontSize={12.5}
         width={610}
         code={`{
-  "lesson_id": "ch3-process-scheduling",
+  "lesson_id": "example-week-1",
   "total_minutes": 45,
   "stages": [
     { "id": "guided_learning",  "enabled": true,

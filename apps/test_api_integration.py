@@ -16,11 +16,60 @@ from apps import server
 import agent
 
 
+def upload_test_lesson(
+    client: TestClient,
+    lesson_id: str,
+    course_id: str = "test-course",
+    course: str = "测试课程",
+) -> None:
+    payload = {
+        "lesson_id": lesson_id,
+        "lesson_title": "第1周 测试课时",
+        "course_id": course_id,
+        "course": course,
+        "chapter": "第 1 周",
+        "week": 1,
+        "course_summary": "用于自动化测试的临时课程。",
+        "total_minutes": 40,
+        "stages": [
+            {"id": "guided_learning", "enabled": True, "minutes": 20,
+             "advance_when": "either", "delivery": "video"},
+            {"id": "recap_discussion", "enabled": True, "minutes": 10,
+             "advance_when": "either"},
+            {"id": "deep_inquiry", "enabled": True, "minutes": 5,
+             "advance_when": "either"},
+            {"id": "class_discussion", "enabled": True, "minutes": 5,
+             "advance_when": "budget"},
+        ],
+        "knowledge_points": [{
+            "kp_id": "KP-001",
+            "title": "测试知识点",
+            "定义": "这是测试用的定义。",
+            "检测问题": "测试检测问题？",
+            "掌握表现": "能用自己的话说明核心概念。",
+        }],
+        "segments": [{
+            "id": "seg-001",
+            "minutes": 20,
+            "title": "测试段落",
+            "knowledge_point_ids": ["KP-001"],
+            "knowledge_points": ["测试知识点"],
+            "summary": "测试段落摘要",
+            "content": "测试段落正文。",
+        }],
+    }
+    response = client.post("/api/teacher/lesson", json=payload)
+    if response.status_code != 200:
+        raise AssertionError(response.text)
+
+
 class StudentApiIntegrationTest(unittest.TestCase):
     sid = "test-student-api-integration"
+    lesson_id = "test-student-api-lesson"
 
     def setUp(self) -> None:
         self.client = TestClient(server.app)
+        upload_test_lesson(self.client, self.lesson_id)
         server.SESSIONS.pop(self.sid, None)
         server._path(self.sid).unlink(missing_ok=True)
 
@@ -29,11 +78,12 @@ class StudentApiIntegrationTest(unittest.TestCase):
         if session:
             session["stop"].set()
         server._path(self.sid).unlink(missing_ok=True)
+        (agent.LESSONS_DIR / f"{self.lesson_id}.json").unlink(missing_ok=True)
 
     def test_resources_and_single_ai_message_flow(self) -> None:
         courses = self.client.get("/api/student/courses")
         self.assertEqual(courses.status_code, 200)
-        lesson_id = courses.json()["courses"][0]["lessons"][0]["lessonId"]
+        lesson_id = self.lesson_id
 
         lesson = self.client.get("/api/lesson", params={"lessonId": lesson_id})
         self.assertEqual(lesson.status_code, 200)
@@ -59,7 +109,7 @@ class StudentApiIntegrationTest(unittest.TestCase):
 
         answer = self.client.post(
             f"/api/session/{self.sid}/message",
-            json={"text": "调度负责在多个就绪进程之间分配 CPU，并决定运行多久。"},
+            json={"text": "我先用自己的话说明这个知识点的核心含义。"},
         )
         self.assertEqual(answer.status_code, 200)
         self.assertIn("reply_text", answer.json())
@@ -72,7 +122,7 @@ class StudentApiIntegrationTest(unittest.TestCase):
         self.assertEqual(discussion.json()["phase"], "class_discussion")
         discussion_reply = self.client.post(
             f"/api/session/{self.sid}/message",
-            json={"text": "我认为时间片轮转更重视交互任务的响应速度。"},
+            json={"text": "我会先比较条件和结果，再判断它在什么场景下适用。"},
         )
         self.assertEqual(discussion_reply.json()["phase"], "class_discussion")
         self.assertEqual(discussion_reply.json()["status"], "running")
@@ -86,9 +136,8 @@ class StudentApiIntegrationTest(unittest.TestCase):
         接入真实大模型后一轮要好几秒，这个窗口很容易撞上（本地跑测试时
         tearDown 删掉的会话文件三秒后自己长了回来）。
         """
-        lesson_id = self.client.get("/api/student/courses").json()["courses"][0]["lessons"][0]["lessonId"]
         self.client.post("/api/session/start", json={
-            "session_id": self.sid, "lesson_id": lesson_id})
+            "session_id": self.sid, "lesson_id": self.lesson_id})
         self.client.post(f"/api/session/{self.sid}/begin")
         self.client.delete(f"/api/session/{self.sid}")
 
@@ -110,7 +159,7 @@ class StudentApiIntegrationTest(unittest.TestCase):
         for bad in ("../../pwned", "../evil", "a/b", "..", ".hidden", "C:foo"):
             with self.subTest(bad):
                 response = self.client.post("/api/session/start", json={
-                    "session_id": bad, "lesson_id": "ch3-process-scheduling",
+                    "session_id": bad, "lesson_id": self.lesson_id,
                 })
                 self.assertEqual(response.status_code, 400)
         self.assertFalse((agent.ROOT / "pwned.json").exists())
@@ -123,7 +172,6 @@ class TeacherLessonApiTest(unittest.TestCase):
 
     sid = "test-teacher-lesson-api"
     lesson_id = "test-uploaded-lesson"
-    legacy_lesson_id = "ch3-process-scheduling"
     # 用自己的学生号：掌握档案是**按学生**持久化的，跟着 student-001 跑会把
     # 测试用的 KP-901 写进开发机上的真实档案里，冒烟测试的下课总结都能看到它。
     student_id = "test-teacher-lesson-student"
@@ -204,7 +252,6 @@ class TeacherLessonApiTest(unittest.TestCase):
         courses = self.client.get("/api/student/courses").json()["courses"]
         listed = [ls["lessonId"] for c in courses for ls in c["lessons"]]
         self.assertIn(self.lesson_id, listed)
-        self.assertIn(self.legacy_lesson_id, listed)      # 旧课时没被挤掉
         lesson = self.client.get("/api/lesson", params={"lessonId": self.lesson_id})
         self.assertEqual(lesson.status_code, 200)
         self.assertEqual(lesson.json()["lesson"]["chapter"], "第 9 周")
@@ -219,8 +266,8 @@ class TeacherLessonApiTest(unittest.TestCase):
         self.assertIn("[本课知识点]", context)              # 本功能的核心断言
         self.assertIn("测试知识点标题", context)
         self.assertIn("测试检测问题？", context)
-        # 上传的课时不能带上旧课时的知识点目录，否则模型会看到两门课的内容
-        self.assertNotIn("调度是什么", context)
+        # 上传的课时不能带上其它课时的知识点目录。
+        self.assertNotIn("旧课时知识库标记", context)
         self.assertNotIn("[知识库]", context)
 
         # active_segment_id 要到 teach 阶段才选定，而 load_context 跑在 teach 之前，
@@ -234,8 +281,7 @@ class TeacherLessonApiTest(unittest.TestCase):
     def test_uploaded_lesson_asks_its_own_questions(self) -> None:
         """上传的课时必须问自己的知识点，不能借旧课时的题库。
 
-        runtime/TMISSION.md 与 rules/KNOWLEDGE-BASE.md 写的都是旧课时的内容，
-        落回那里就会让学生在被"上"新课的同时被问旧课的问题。
+        没有课时级题库时也不能回落到共享文件中的其它课程内容。
         """
         self.client.post("/api/teacher/lesson", json=self._payload())
         self._start_and_begin(self.lesson_id)
@@ -310,11 +356,6 @@ class TeacherLessonApiTest(unittest.TestCase):
         titles = {kp["kp_id"]: kp["title"] for kp in report["knowledge_points"]}
         self.assertEqual(titles.get("KP-901"), "测试知识点标题")
 
-    def test_legacy_lesson_has_no_uploaded_block(self) -> None:
-        """旧课时没有上传的知识点，不该凭空多出空区块。"""
-        self._start_and_begin(self.legacy_lesson_id)
-        self.assertNotIn("[本课知识点]", self._persisted()["assembled_prompt"])
-
     def test_rejects_unsafe_lesson_id(self) -> None:
         for bad in ("../evil", "a/b", "..", "CON"):
             body = self._payload() | {"lesson_id": bad}
@@ -369,7 +410,15 @@ class StudentAccountTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch.object(
+            server, "JOIN_CODES_PATH", Path(self.tmp.name) / "join-codes.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.client = TestClient(server.app)
+        self.lesson_id = "test-student-account-lesson"
+        upload_test_lesson(self.client, self.lesson_id, "test-account-course", "测试选课")
         self.number = f"9{int(time.time() * 1000) % 10 ** 9:09d}"
         self.password = "hunter2"
         self.addCleanup(self._cleanup)
@@ -383,6 +432,7 @@ class StudentAccountTest(unittest.TestCase):
             server._save_accounts(accounts)
         if student_dir:
             shutil.rmtree(student_dir, ignore_errors=True)
+        (agent.LESSONS_DIR / f"{self.lesson_id}.json").unlink(missing_ok=True)
 
     def _register(self, name: str = "测试学生", password: str | None = None):
         return self.client.post("/api/student/register", json={
@@ -392,9 +442,12 @@ class StudentAccountTest(unittest.TestCase):
         })
 
     def _join_code(self) -> str:
-        codes = server._join_codes()
-        self.assertTrue(codes, "lesson-data/join-codes.json 应有预置课程码")
-        return next(iter(codes.values()))
+        courses = self.client.get("/api/student/courses").json()["courses"]
+        self.assertTrue(courses)
+        return self.client.post(
+            "/api/teacher/course-code",
+            json={"course_id": courses[0]["courseId"]},
+        ).json()["code"]
 
     # ── 注册 ──────────────────────────────────────────────
 
@@ -511,11 +564,17 @@ class TeacherCourseCodeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.client = TestClient(server.app)
+        self.lesson_id = "test-course-code-lesson"
+        upload_test_lesson(self.client, self.lesson_id, "test-code-course", "测试课程码")
+        self.addCleanup(
+            (agent.LESSONS_DIR / f"{self.lesson_id}.json").unlink,
+            missing_ok=True,
+        )
         patcher = mock.patch.object(
             server, "JOIN_CODES_PATH", Path(self.tmp.name) / "join-codes.json")
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.client = TestClient(server.app)
 
     def _a_course_id(self) -> str:
         courses = self.client.get("/api/student/courses").json()["courses"]

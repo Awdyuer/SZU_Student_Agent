@@ -38,7 +38,8 @@ sys.path.insert(0, str(ROOT / "orchestrator"))
 from agent import (  # noqa: E402
     EVENT_BEGIN, EVENT_MEDIA_DONE, EVENT_NEXT_STAGE,
     STAGE_NAMES, STAR_STATUS, build_graph, initial_state, is_uploaded_lesson,
-    kp_title, lesson_source_label, list_lesson_ids, load_lesson,
+    kp_title, lesson_source_label, list_lesson_ids, list_lesson_knowledge_points,
+    load_lesson,
     run_turn_stateless, safe_lesson_id, save_lesson, validate_plan,
 )
 
@@ -188,7 +189,14 @@ def _step(sid: str, message: str = "", speaker: str = "student",
         # 下课：advance_stage 置 student_status=ended 那一刻，课就算结束
         if st.get("host_phase") == "ending" and st.get("student_status") == "ended":
             st["lesson_status"] = "ended"
-        s["state"] = st
+        history = list(st.get("dialogue_history") or [])
+        if message and speaker == "student":
+            history.append({
+                "role": "student",
+                "text": message,
+                "at": st.get("now"),
+                "phase": st.get("host_phase"),
+            })
         reply = (st.get("reply_text") or "").strip()
         if reply:
             s["messages"].append({
@@ -199,6 +207,14 @@ def _step(sid: str, message: str = "", speaker: str = "student",
                 "phase": st.get("host_phase"),
                 "llm": bool(st.get("llm_used")),
             })
+            history.append({
+                "role": "teacher",
+                "text": reply,
+                "at": st.get("now"),
+                "phase": st.get("host_phase"),
+            })
+        st["dialogue_history"] = history
+        s["state"] = st
         _persist(sid, st)
     return st
 
@@ -288,6 +304,10 @@ def _lesson_payload(lesson_id: str) -> dict:
     plan, raw_segments = _require_lesson(lesson_id)
     segments = _lesson_segments(plan, raw_segments)
     knowledge_points = []
+    for point in list_lesson_knowledge_points(lesson_id):
+        name = str(point.get("title") or point.get("kp_id") or "").strip()
+        if name and name not in knowledge_points:
+            knowledge_points.append(name)
     for segment in segments:
         for name in segment.get("knowledgePoints") or []:
             if name not in knowledge_points:
@@ -297,8 +317,8 @@ def _lesson_payload(lesson_id: str) -> dict:
     summary = plan.get("summary") or "；".join(segment["title"] for segment in segments[:3])
     return {
         "lessonId": plan.get("lesson_id"),
-        "courseId": plan.get("course_id") or "operating-systems",
-        "course": plan.get("course") or "操作系统",
+        "courseId": plan.get("course_id") or "uncategorized",
+        "course": plan.get("course") or "未分类课程",
         "chapter": plan.get("chapter") or "",
         # 课程级的三个字段跟着课时一起回，目录接口就不用为了分组再读一遍盘
         "week": int(plan.get("week") or 0),
@@ -352,7 +372,7 @@ def _running(sid: str) -> dict:
 class StartIn(BaseModel):
     session_id: str | None = None
     student_id: str = "student-001"
-    lesson_id: str = "ch3-process-scheduling"
+    lesson_id: str = ""
     time_scale: float = 1.0        # >1 压缩时间：课前演练用 12 倍把 45 分钟压到 4 分钟
 
 
@@ -427,7 +447,7 @@ def lesson_video(lessonId: str) -> dict:
 # rules/KNOWLEDGE-BASE.md、lesson-data/lesson-plan.json、
 # lesson-data/segments/*.json 三处文件；而编排器的 load_context 虽然
 # 会把这些装配进 assembled_prompt，那个字段却从没被送进模型。
-# 现在：写一个接口收课时定义，落盘成 lesson-data/lessons/<id>.json，
+# 现在：写一个接口收课时定义，落盘成 lesson-data/lesson-plan/<id>.json，
 # 由 agent 的 load_context 每轮读进 [本课知识点] 区块，
 # 再由 llm_polish 随 assembled_prompt 一起交给模型。
 # ═══════════════════════════════════════════════════════════════
@@ -477,8 +497,8 @@ class LessonIn(BaseModel):
     segments: list[SegmentIn] = Field(default_factory=list)
     knowledge_points: list[KnowledgePointIn] = Field(default_factory=list)
     advance_policy: dict | None = None
-    course_id: str = "operating-systems"
-    course: str = "操作系统"
+    course_id: str = "uncategorized"
+    course: str = "未分类课程"
     chapter: str = ""
     week: int = 0
     summary: str = ""
@@ -1110,6 +1130,14 @@ def export(sid: str, fmt: str = "md") -> Response:
     plan = st.get("lesson_plan") or {}
     student_id = st.get("student_id")
     lesson_id = st.get("lesson_id")
+    all_points = {
+        str(point.get("kp_id")): str(point.get("title") or point.get("kp_id"))
+        for point in list_lesson_knowledge_points(lesson_id)
+        if point.get("kp_id")
+    }
+    for kp in stars:
+        all_points.setdefault(kp, kp_title(kp, lesson_id))
+    report_stars = {kp: int(stars.get(kp, 0)) for kp in all_points}
 
     if fmt == "json":
         return Response(
@@ -1118,9 +1146,10 @@ def export(sid: str, fmt: str = "md") -> Response:
                 "session_id": sid,
                 "lesson_elapsed_minutes": st.get("lesson_elapsed_minutes"),
                 "knowledge_points": [
-                    {"kp_id": kp, "title": kp_title(kp, lesson_id), "stars": v,
+                    {"kp_id": kp, "title": all_points.get(kp, kp_title(kp, lesson_id)),
+                     "stars": v,
                      "status": STAR_STATUS.get(v, "未检测")}
-                    for kp, v in sorted(stars.items())
+                    for kp, v in sorted(report_stars.items())
                 ],
                 "stage_snapshots": snaps,
             }, ensure_ascii=False, indent=2),
@@ -1128,7 +1157,7 @@ def export(sid: str, fmt: str = "md") -> Response:
             headers={"Content-Disposition": f'attachment; filename="{sid}.json"'},
         )
 
-    weak = [(kp, v) for kp, v in sorted(stars.items()) if v <= 2]
+    weak = [(kp, v) for kp, v in sorted(report_stars.items()) if v <= 2]
     lines = [
         f"# 学情报告 · {plan.get('lesson_title', lesson_id)}",
         "",
@@ -1143,8 +1172,8 @@ def export(sid: str, fmt: str = "md") -> Response:
         "| 知识点 | 星级 | 状态 |",
         "| --- | --- | --- |",
     ]
-    for kp, v in sorted(stars.items()):
-        lines.append(f"| {kp} {kp_title(kp, lesson_id)} | {'★' * v or '—'} | "
+    for kp, v in sorted(report_stars.items()):
+        lines.append(f"| {kp} {all_points.get(kp, kp_title(kp, lesson_id))} | {'★' * v or '—'} | "
                      f"{STAR_STATUS.get(v, '未检测')} |")
     if snaps:
         lines += ["", "## 各阶段表现", "",

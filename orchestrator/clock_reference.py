@@ -138,7 +138,7 @@ def main():
     print("\n── 证据与预算的优先级 ──")
     st = base_state()
     st = replay(st, ["10:03"])
-    st["turn_evidence"] = ["学生说出高级调度把作业调入内存"]
+    st["turn_evidence"] = ["学生说清当前知识点的核心含义"]
     st["unresolved"] = []
     results.append(check("3 分钟但目标全关闭 → 切幕（证据优先）",
                          judge_advance(st), "next_stage"))

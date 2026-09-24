@@ -82,17 +82,17 @@
 ### 2.1 下发课时定义 ✅
 
 老师（或底座的课程编辑模块）把一节课完整传进来，本系统落盘成
-`lesson-data/lessons/<lesson_id>.json`，之后这节课就能被选课、开课、出报告。
+`lesson-data/lesson-plan/<lesson_id>.json`，之后这节课就能被选课、开课、出报告。
 
 ```bash
 POST http://<engine>/api/teacher/lesson
 Content-Type: application/json
 
 {
-  "lesson_id": "ch4-deadlock",          # 主键。只允许字母数字与 . _ -，以字母数字开头，≤64 字符
-  "lesson_title": "第4章 死锁",
-  "course_id": "operating-systems",     # 底座侧的课程 id，本系统按它分组课程目录
-  "course": "操作系统",
+  "lesson_id": "example-week-4",        # 主键。只允许字母数字与 . _ -，以字母数字开头，≤64 字符
+  "lesson_title": "第4周 示例课时",
+  "course_id": "example-course",        # 底座侧的课程 id，本系统按它分组课程目录
+  "course": "示例课程",
   "chapter": "第 4 周",
   "week": 4,
   "total_minutes": 45,
@@ -102,16 +102,16 @@ Content-Type: application/json
     {"id": "deep_inquiry",     "enabled": true, "minutes": 10, "advance_when": "either"}
   ],
   "knowledge_points": [
-    {"kp_id": "KP-401", "title": "死锁的定义",
-     "定义": "两个或多个进程互相持有对方需要的资源并等待……",
-     "检测问题": "死锁产生的四个必要条件分别是什么？",
-     "掌握表现": "能说出四个必要条件并解释缺一不可。",
+    {"kp_id": "KP-401", "title": "示例知识点",
+     "定义": "用一句话说明这个概念是什么。",
+     "检测问题": "能检验学生是否理解核心含义的问题。",
+     "掌握表现": "能用自己的话说明核心含义。",
      "为什么这样设计": "", "如何实现": "", "解决什么实际问题": "", "关联学科": ""}
   ],
   "segments": [
-    {"id": "seg-401", "minutes": 20, "order": 1, "title": "死锁与四个必要条件",
-     "knowledge_point_ids": ["KP-401"], "knowledge_points": ["死锁"],
-     "summary": "死锁的成因", "content": "互斥、持有并等待、不可剥夺、循环等待……"}
+    {"id": "seg-401", "minutes": 20, "order": 1, "title": "示例段落",
+     "knowledge_point_ids": ["KP-401"], "knowledge_points": ["示例知识点"],
+     "summary": "示例摘要", "content": "示例内容。"}
   ]
 }
 ```
@@ -119,8 +119,8 @@ Content-Type: application/json
 响应：
 
 ```json
-{"ok": true, "lesson_id": "ch4-deadlock",
- "path": "lesson-data/lessons/ch4-deadlock.json",
+{"ok": true, "lesson_id": "example-week-4",
+ "path": "lesson-data/lesson-plan/example-week-4.json",
  "knowledgePointCount": 1, "segmentCount": 1,
  "staleSessions": [], "note": ""}
 ```
@@ -136,8 +136,7 @@ Content-Type: application/json
 4. **`staleSessions` 非空表示有正在上课的会话仍用旧版本。** 课时定义在 `/begin`
    那一刻被冻进会话状态（老师不该在上课中途被抽掉进度），所以**改完要新建会话
    才生效**；但知识点正文是每轮重读的，改错别字下一次心跳就生效。
-5. **用内置课时的 id 可以覆盖它**（`ch3-process-scheduling`）。会生成 store 文件
-   覆盖内置那份，删掉就恢复，内置文件本身不改写。
+5. **重复上传同一个 `lesson_id` 会覆盖旧版本**，新会话使用新版本。
 
 **错误码**：`lesson_id` 非法（`../evil`、`a/b`、`CON`）→ `400`；
 定义校验不过 → `422`，`detail` 是中文问题清单。
@@ -197,7 +196,7 @@ GET /api/session/{sid}/state
 {"status": "running", "phase": "recap_discussion", "phase_name": "复述阶段",
  "stage_elapsed_minutes": 3.2, "stage_budget_minutes": 15.0,
  "lesson_elapsed_minutes": 23.5, "total_minutes": 45.0,
- "current_question": "死锁产生的四个必要条件分别是什么？",
+ "current_question": "当前知识点要解决的核心问题是什么？",
  "advance_reason": "未达最短幕时长", "student_status": "active",
  "updated_at": "2026-09-22T15:51:41+08:00", "time_scale": 1.0,
  "stars": {"KP-401": 3},
@@ -235,7 +234,7 @@ GET /api/session/{sid}/export?fmt=json
 ```json
 {"student_id": "…", "lesson_id": "ch4-deadlock", "session_id": "…",
  "lesson_elapsed_minutes": 38.2,
- "knowledge_points": [{"kp_id": "KP-401", "title": "死锁的定义", "stars": 4, "status": "接近掌握"}],
+ "knowledge_points": [{"kp_id": "KP-401", "title": "示例知识点", "stars": 4, "status": "接近掌握"}],
  "stage_snapshots": [{"type": "stage_snapshot", "snapshot_id": "ss-002",
    "student_id": "…", "lesson_id": "ch4-deadlock", "stage": "recap_discussion",
    "stage_elapsed_minutes": 9.0, "targets_closed": ["KP-401"], "targets_open": [],

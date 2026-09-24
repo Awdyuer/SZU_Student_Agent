@@ -60,13 +60,13 @@
   "type": "stage_snapshot",
   "snapshot_id": "ss-001",
   "student_id": "student-001",
-  "lesson_id": "ch3-process-scheduling",
+  "lesson_id": "example-lesson",
   "stage": "recap_discussion",
   "stage_elapsed_minutes": 9.2,
-  "targets_closed": ["三级调度的对象与时机"],
-  "targets_open": ["抢占式与非抢占式"],
+  "targets_closed": ["示例知识点"],
+  "targets_open": ["待完成知识点"],
   "stars_snapshot": { "KP-001": 2, "KP-002": 3 },
-  "evidence": "学生能说出高级调度把作业调入内存，但把中级调度说成'中间那一步'。",
+  "evidence": "学生能复述核心定义，但还没有说明它的设计原因。",
   "occurred_at": "2026-09-17T15:20:00+08:00"
 }
 ```
@@ -100,7 +100,7 @@
   "new_status": "理解中",
   "source": "dialogue",
   "stage": "recap_discussion",
-  "evidence": "学生能用自己的话说明三级调度各自的对象与时机。",
+  "evidence": "学生能用自己的话说明示例知识点的核心含义。",
   "occurred_at": "2026-09-17T15:20:00+08:00"
 }
 ```
@@ -131,7 +131,7 @@
   "assessment_status": "未考核",
   "last_source": "dialogue",
   "last_stage": "recap_discussion",
-  "last_evidence": "学生能用自己的话说明三级调度各自的对象与时机。",
+  "last_evidence": "学生能用自己的话说明示例知识点的核心含义。",
   "updated_at": "2026-09-17T15:20:00+08:00"
 }
 ```

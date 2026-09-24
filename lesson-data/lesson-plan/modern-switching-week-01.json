@@ -1,0 +1,47 @@
+{
+  "lesson_id": "modern-switching-week-01",
+  "lesson_title": "第1周 课程导学与交换的基本概念",
+  "course_id": "modern-switching",
+  "course": "现代交换原理",
+  "chapter": "第 1 周",
+  "week": 1,
+  "summary": "理解交换为什么存在、交换机解决什么问题，以及面向连接与无连接的基本区别。",
+  "course_icon": "⇄",
+  "course_summary": "从通信网与交换的基本概念出发，建立现代交换技术的整体框架。",
+  "total_minutes": 45,
+  "stages": [
+    {
+      "id": "guided_learning",
+      "enabled": true,
+      "minutes": 10,
+      "delivery": "video",
+      "advance_when": "either"
+    },
+    {
+      "id": "recap_discussion",
+      "enabled": true,
+      "minutes": 20,
+      "advance_when": "either"
+    },
+    {
+      "id": "deep_inquiry",
+      "enabled": true,
+      "minutes": 15,
+      "advance_when": "either"
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg-video-001",
+      "minutes": 10,
+      "title": "第一讲 课程导学与交换的基本概念",
+      "order": 1
+    }
+  ],
+  "advance_policy": {
+    "on_budget_exhausted": "wrap_up",
+    "on_evidence_reached": "advance",
+    "min_stage_minutes": 2,
+    "max_stage_overrun_minutes": 3
+  }
+}

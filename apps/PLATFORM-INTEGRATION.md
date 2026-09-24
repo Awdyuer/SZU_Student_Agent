@@ -43,7 +43,7 @@
 - 层级：平台 `course → modules → lessons → files`，本仓库 `courses → lessons → segments`
 - 素材：平台是**互动课件**（`stage` + `scenes`，四类场景 + 22 种播放动作），
   本仓库是**单个视频 + 时间轴**，且项目自己不建播放器，只提供挂载点
-- ID：平台 `courseId`/`classroomId`/`artifactId`/`CLS-*`，本仓库 `ch3-process-scheduling`/`seg-001`/`KP-001`
+- ID：平台 `courseId`/`classroomId`/`artifactId`/`CLS-*`，本仓库 `lesson_id`/`seg-001`/`KP-001`
 
 **真正的工作量在中间那层适配**（平台的已发布内容 → 本仓库的课时模型；本仓库的学情
 → 平台的班级学生记录）。这两件事都**不存在现成实现**。

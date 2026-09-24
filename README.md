@@ -71,8 +71,6 @@
 └── orchestrator/                # 编排器：规范 + 实现 + 演示
     ├── ORCHESTRATOR.md          #   ★ LangGraph 状态图、节点、条件边、调度约定（权威规范）
     ├── agent.py                 #   ★ 真实 LangGraph 实现（11 节点，可直接跑）
-    ├── run_demo.py              #   ★ 模拟一节课并打印编排过程
-    ├── demo-run.md              #     上面这个脚本的一次真实运行实录
     ├── graph_skeleton.py        #     骨架版（只看 LangGraph 怎么写，不跑）
     ├── HOW-IT-WORKS.md          #     自然语言讲运作过程
     ├── clock_reference.py       #     真实时钟与切幕判定的参考实现 + 回归测试
@@ -82,9 +80,8 @@
 ### 跑起来（真实 LangGraph）
 
 ```bash
-# 依赖装在隔离 Python 环境里
 pip install -r requirements.txt
-python orchestrator/run_demo.py        # 模拟一节课（讲解 → 复述 → 探究 → 下课）
+python apps/start.py
 ```
 
 ### 课堂里跑起来（一键）
@@ -140,7 +137,7 @@ python apps/start.py --no-browser    # 只起服务
 [等待上课·uninitialized] > /begin
 [上课中·讲解阶段] > /video
 [上课中·讲解阶段] > （第 2 段讲解词）
-[上课中·复述阶段] > 高级调度把作业调进内存……
+[上课中·复述阶段] > 我先用自己的话复述本节课的核心概念……
 [上课中·复述阶段] > （AI 反馈 + 星级）
 [上课中·复述阶段] > /next
 ```
@@ -171,7 +168,6 @@ python apps/smoke_test.py chat             # 模拟学生答题，看反馈与�
 ```bash
 cp .env.local.example .env.local    # 然后填入你的 Key（该文件已进 .gitignore）
 python orchestrator/llm_probe.py    # 先单独验证端点通不通
-python orchestrator/run_demo.py     # 再跑整节课
 ```
 
 也可以直接用环境变量，不用建文件：
@@ -209,7 +205,7 @@ export AGENT_LLM_MODEL=deepseek-chat
 ## 老师配一门课：三步
 
 > **现在有接口了**：`POST /api/teacher/lesson` 一次传完整的一节课
-> （元数据 + 阶段 + 段落 + 知识点），落盘成 `lesson-data/lessons/<lesson_id>.json`，
+> （元数据 + 阶段 + 段落），落盘成 `lesson-data/lesson-plan/<lesson_id>.json`，
 > 不用再手工改三处文件；系统也不再只能跑一节课。契约见
 > [apps/API.md 第 10 节](apps/API.md)，回读用 `GET /api/teacher/lesson/{id}`。
 >
@@ -222,7 +218,7 @@ export AGENT_LLM_MODEL=deepseek-chat
 
 ```json
 {
-  "lesson_id": "ch3-process-scheduling",
+  "lesson_id": "example-week-1",
   "total_minutes": 45,
   "stages": [
     { "id": "guided_learning",  "enabled": true,  "minutes": 22, "advance_when": "either" },
@@ -353,7 +349,7 @@ lesson_elapsed_minutes = now - lesson_started_at    # 本课已花分钟
 | **课后报告只在同源下能跑** | 页面已接真实导出接口（`USE_MOCK` 那套 mock 已随前端重构移除）。生产由 FastAPI 同源托管，正常；但**后端没有 CORS 中间件**，前端跑 `localhost:3000`、后端在 `127.0.0.1:8000` 时请求会被浏览器拦掉。联调前需给 FastAPI 加 `CORSMiddleware`，或让前端走同源代理 | 中 |
 | **报告可能缺少「未接触」的知识点** | 后端只在 `kp_stars` 有条目时才输出知识点，学生完全没碰过的不进数组，于是整个 `knowledge_points` 可能是空的，页面画不出「未检测」那些行。建议后端按课时知识点目录补全，未接触的返回 `stars: 0` | 中 |
 | **后端 `STAR_STATUS` 只定义了 1–4 星** | 缺 0 和 5 两个键，所以一个 5 星知识点会被后端报成 `"status": "未检测"`。前端已按权威规则表本地兜底（不重算星级，只补标签），后端仍应补上这两个键 | 低 |
-| **上传课时的判星链路是空的** | `EVIDENCE_GROUPS`（`agent.py`）是写死的旧课时关键词表。老师上传的新知识点没有对应组 → `match_evidence()` 返回 `(0, 0)` → 复述/探究阶段**不会靠关键词升星**，`judge_advance` 的「证据充分」分支也不会触发，只能按时间预算切幕。知识点能被讲、能被问（题库已按课时隔离，不会再借旧课的题），但星级到不了 3 星以上。解法是让上传时带 per-KP 关键词 | 中 |
+| **上传课时的判星链路是空的** | 当前没有内置关键词证据组。上传课时可以完成讲解、提问和阶段推进，但复述/探究阶段不会仅靠关键词升星；需要后续在课时定义中补充每个知识点的可观察证据 | 中 |
 | **课时定义无鉴权** | `POST /api/teacher/lesson` 会写盘且不需要凭证，而 `apps/start.py` 默认绑 `0.0.0.0`。局域网内任何人都能覆盖课时、进而向课堂注入任意提示词内容。生产部署前需要加 token 或反向代理 | 中（仅部署相关） |
 
 已解决：~~无定时器~~（学生不发消息就无法切幕）—— 心跳时钟见上文「课堂里跑起来」。

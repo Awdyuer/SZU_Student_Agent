@@ -60,7 +60,7 @@ def probe(verbose: bool = False) -> int:
             "model": model,
             "messages": [
                 {"role": "system", "content": "你是一名课堂智能体。"},
-                {"role": "user", "content": "用一句话说明什么是处理机调度。"},
+                {"role": "user", "content": "用一句话确认你能正常回复。"},
             ],
             "max_tokens": 120,
         }
